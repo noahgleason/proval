@@ -10,16 +10,19 @@ import {
   View,
 } from 'react-native';
 import { REACTIONS, type Decision, type ReactionId } from '../types';
-import { colors, radius } from '../theme';
+import { colors, radius, type } from '../theme';
+import { Icon, REACTION_ICON } from './Icon';
 
 type Props = {
   decision: Decision | null;
+  /** Who sent the photo, so the prompt can name them. */
+  askerName: string;
   onSend: (reaction?: ReactionId, comment?: string) => void;
   onUndo: () => void;
 };
 
 /** Pops up after a swipe so you can add "last resort", "crop me out", or a note. */
-export function ReviewSheet({ decision, onSend, onUndo }: Props) {
+export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
   const [reaction, setReaction] = useState<ReactionId | undefined>();
   const [comment, setComment] = useState('');
 
@@ -37,8 +40,16 @@ export function ReviewSheet({ decision, onSend, onUndo }: Props) {
     <Modal transparent animationType="slide" visible onRequestClose={onUndo}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
         <View style={styles.sheet}>
-          <Text style={[styles.title, { color: accent }]}>{approve ? 'Approved 👍' : 'Denied 🙅‍♀️'}</Text>
-          <Text style={styles.sub}>Add a note so she knows where you stand (optional)</Text>
+          <View style={styles.grabber} />
+          <View style={styles.head}>
+            <View style={[styles.verdict, { backgroundColor: accent }]}>
+              <Icon name={approve ? 'check' : 'x'} size={20} color="#fff" weight={2.6} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title}>{approve ? 'Approved' : 'Denied'}</Text>
+              <Text style={styles.sub}>Tell {askerName || 'them'} where you stand. Optional.</Text>
+            </View>
+          </View>
 
           <View style={styles.chips}>
             {options.map((r) => {
@@ -47,11 +58,10 @@ export function ReviewSheet({ decision, onSend, onUndo }: Props) {
                 <Pressable
                   key={r.id}
                   onPress={() => setReaction(on ? undefined : r.id)}
-                  style={[styles.chip, on && { backgroundColor: accent, borderColor: accent }]}
+                  style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
                 >
-                  <Text style={[styles.chipText, on && { color: '#fff' }]}>
-                    {r.emoji} {r.label}
-                  </Text>
+                  <Icon name={REACTION_ICON[r.id]} size={16} color={on ? '#fff' : colors.ink} weight={1.9} />
+                  <Text style={[styles.chipText, on && { color: '#fff' }]}>{r.label}</Text>
                 </Pressable>
               );
             })}
@@ -69,9 +79,10 @@ export function ReviewSheet({ decision, onSend, onUndo }: Props) {
 
           <View style={styles.row}>
             <Pressable onPress={onUndo} style={[styles.btn, styles.ghost]}>
-              <Text style={[styles.btnText, { color: colors.muted }]}>Undo</Text>
+              <Icon name="undo" size={18} color={colors.ink} weight={2} />
+              <Text style={[styles.btnText, { color: colors.ink }]}>Undo</Text>
             </Pressable>
-            <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, { backgroundColor: accent }]}>
+            <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, styles.primary]}>
               <Text style={[styles.btnText, { color: '#fff' }]}>
                 {reaction || comment.trim() ? 'Send' : 'Skip note'}
               </Text>
@@ -84,38 +95,54 @@ export function ReviewSheet({ decision, onSend, onUndo }: Props) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(30,15,22,0.35)' },
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim },
   sheet: {
     backgroundColor: colors.card,
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
     paddingBottom: 36,
-    gap: 14,
+    gap: 18,
   },
-  title: { fontSize: 22, fontWeight: '800' },
-  sub: { color: colors.muted, marginTop: -8 },
+  grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.line },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  verdict: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  title: { ...type.title, color: colors.ink },
+  sub: { color: colors.muted, marginTop: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingLeft: 11,
+    paddingRight: 13,
+    paddingVertical: 9,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.line,
-    backgroundColor: colors.bg,
+    backgroundColor: colors.card,
   },
   chipText: { color: colors.ink, fontWeight: '600' },
   input: {
-    minHeight: 64,
+    minHeight: 72,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.line,
-    padding: 12,
+    backgroundColor: colors.bg,
+    padding: 14,
     color: colors.ink,
     textAlignVertical: 'top',
   },
   row: { flexDirection: 'row', gap: 10 },
-  btn: { flex: 1, paddingVertical: 14, borderRadius: radius.pill, alignItems: 'center' },
-  ghost: { backgroundColor: colors.bg },
+  btn: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 15,
+    borderRadius: radius.pill,
+  },
+  ghost: { borderWidth: 1, borderColor: colors.line },
+  primary: { backgroundColor: colors.ink },
   btnText: { fontWeight: '700', fontSize: 16 },
 });

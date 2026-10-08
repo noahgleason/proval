@@ -1,10 +1,13 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { api } from '../api';
 import { Avatar } from '../components/Avatar';
-import { colors, radius } from '../theme';
-import { USERS } from '../users';
+import { Icon } from '../components/Icon';
+import { PostPreview } from '../components/PostPreview';
+import { colors, radius, type } from '../theme';
+import { AUTO_APPROVE_HOURS } from '../types';
+import { userById } from '../users';
 
 type Props = { userId: string; onSubmitted: () => void };
 
@@ -17,7 +20,17 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const friends = USERS.filter((u) => u.id !== userId);
+  const [friendIds, setFriendIds] = useState<string[] | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+
+  useEffect(() => {
+    api.friends(userId).then(
+      (s) => setFriendIds(s.friends),
+      () => setFriendIds([]),
+    );
+  }, [userId]);
+
+  const friends = (friendIds ?? []).map(userById);
 
   const pick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -66,30 +79,43 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
 
   return (
     <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
-      <Text style={styles.h1}>Ask before you post</Text>
+      <View style={styles.head}>
+        <Text style={styles.eyebrow}>New request</Text>
+        <Text style={styles.h1}>Ask first</Text>
+      </View>
 
       <Pressable onPress={pick} style={styles.picker}>
         {picked ? (
           <Image source={{ uri: picked.uri }} style={styles.preview} />
         ) : (
-          <Text style={styles.pickerText}>＋ Choose a photo</Text>
+          <View style={styles.pickerEmpty}>
+            <View style={styles.pickerIcon}>
+              <Icon name="image" size={26} color={colors.ink} />
+            </View>
+            <Text style={styles.pickerText}>Choose a photo</Text>
+            <Text style={styles.pickerHint}>Nobody sees it until you send</Text>
+          </View>
         )}
       </Pressable>
 
-      <Text style={styles.label}>Who’s in it?</Text>
+      <Text style={styles.label}>Who’s in it</Text>
+      {friendIds?.length === 0 && (
+        <Text style={styles.hint}>No friends yet. Add some from your profile (tap your name up top).</Text>
+      )}
       <View style={styles.friends}>
         {friends.map((f) => {
           const on = tagged.includes(f.id);
           return (
             <Pressable key={f.id} onPress={() => toggle(f.id)} style={[styles.friend, on && styles.friendOn]}>
               <Avatar userId={f.id} size={28} />
-              <Text style={[styles.friendName, on && { color: colors.brand }]}>{f.name}</Text>
+              <Text style={[styles.friendName, on && { color: '#fff' }]}>{f.name}</Text>
+              {on && <Icon name="check" size={14} color="#fff" weight={2.6} />}
             </Pressable>
           );
         })}
       </View>
 
-      <Text style={styles.label}>Caption (optional)</Text>
+      <Text style={styles.label}>Caption · optional</Text>
       <TextInput
         value={caption}
         onChangeText={setCaption}
@@ -101,60 +127,117 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
 
       {!!error && <Text style={styles.error}>{error}</Text>}
 
+      <View style={styles.note}>
+        <Icon name="clock" size={15} color={colors.muted} weight={2} />
+        <Text style={styles.noteText}>Anyone who doesn’t answer within {AUTO_APPROVE_HOURS}h counts as a yes.</Text>
+      </View>
+
+      {picked && (
+        <Pressable onPress={() => setPreviewing(true)} style={styles.previewBtn}>
+          <Icon name="eye" size={18} color={colors.ink} weight={2} />
+          <Text style={styles.previewText}>Preview post</Text>
+        </Pressable>
+      )}
+
       <Pressable onPress={send} disabled={!canSend} style={[styles.send, !canSend && { opacity: 0.4 }]}>
         {busy ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.sendText}>
-            Send for approval{tagged.length ? ` (${tagged.length})` : ''}
-          </Text>
+          <>
+            <Text style={styles.sendText}>
+              {tagged.length ? `Ask ${tagged.length} ${tagged.length === 1 ? 'friend' : 'friends'}` : 'Send for approval'}
+            </Text>
+            <Icon name="send" size={18} color="#fff" weight={2.2} />
+          </>
         )}
       </Pressable>
+      <PostPreview
+        post={
+          previewing && picked
+            ? { uploaderId: userId, caption: caption.trim(), taggedIds: tagged, imageUrl: picked.uri }
+            : null
+        }
+        viewerId={userId}
+        onClose={() => setPreviewing(false)}
+      />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 16, gap: 12, paddingBottom: 40 },
-  h1: { fontSize: 20, fontWeight: '800', color: colors.ink },
+  wrap: { paddingHorizontal: 20, paddingBottom: 40, gap: 12 },
+  head: { marginTop: 14, marginBottom: 4, gap: 2 },
+  eyebrow: { ...type.label, color: colors.brand },
+  h1: { ...type.display, color: colors.ink },
   picker: {
-    height: 300,
+    height: 320,
     borderRadius: radius.lg,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.line,
     backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  pickerText: { color: colors.brand, fontWeight: '700', fontSize: 16 },
+  pickerEmpty: { alignItems: 'center', gap: 6 },
+  pickerIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: colors.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  pickerText: { color: colors.ink, fontWeight: '700', fontSize: 16 },
+  pickerHint: { color: colors.muted, fontSize: 13 },
   preview: { width: '100%', height: '100%' },
-  label: { fontWeight: '700', color: colors.ink, marginTop: 4 },
+  label: { ...type.label, color: colors.muted, marginTop: 10 },
   friends: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   friend: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 6,
-    paddingLeft: 6,
+    paddingVertical: 5,
+    paddingLeft: 5,
     paddingRight: 14,
     borderRadius: radius.pill,
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    backgroundColor: colors.card,
-  },
-  friendOn: { borderColor: colors.brand, backgroundColor: colors.brandSoft },
-  friendName: { fontWeight: '600', color: colors.ink },
-  input: {
-    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.line,
     backgroundColor: colors.card,
-    padding: 12,
+  },
+  friendOn: { borderColor: colors.ink, backgroundColor: colors.ink },
+  friendName: { fontWeight: '600', color: colors.ink },
+  input: {
+    borderRadius: radius.md,
+    backgroundColor: colors.card,
+    padding: 14,
     color: colors.ink,
   },
   error: { color: colors.deny },
-  send: { marginTop: 8, backgroundColor: colors.brand, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center' },
-  sendText: { color: '#fff', fontWeight: '800', fontSize: 16 },
+  hint: { color: colors.muted, lineHeight: 19 },
+  previewBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 15,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+  },
+  previewText: { color: colors.ink, fontWeight: '700', fontSize: 16 },
+  note: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  noteText: { color: colors.muted, fontSize: 13, flex: 1 },
+  send: {
+    marginTop: 4,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.brand,
+    borderRadius: radius.pill,
+    paddingVertical: 17,
+  },
+  sendText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 });

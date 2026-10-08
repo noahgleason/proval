@@ -1,5 +1,5 @@
 import type { Config } from '@netlify/functions';
-import { REACTIONS, type Review } from '../../src/types';
+import { isExpired, REACTIONS, type Review } from '../../src/types';
 import { fail, isUser, json, metaStore, preflight, toPhoto, type StoredPhoto } from '../lib/store';
 
 /** POST /api/reviews { photoId, reviewerId, decision, reaction?, comment? } */
@@ -27,6 +27,7 @@ export default async (req: Request) => {
     if (!found) return fail('Photo not found', 404);
     const photo = found.data as StoredPhoto;
     if (!photo.taggedIds.includes(reviewerId)) return fail('You are not tagged in this photo', 403);
+    if (isExpired(photo)) return fail('Too late, this one already auto-approved', 409);
 
     const review: Review = {
       decision,

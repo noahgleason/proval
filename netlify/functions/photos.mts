@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { CORS, fail, imageStore, isUser, json, metaStore, preflight, toPhoto, type StoredPhoto } from '../lib/store';
+import { CORS, fail, friendsOf, imageStore, isUser, json, metaStore, preflight, toPhoto, type StoredPhoto } from '../lib/store';
 
 const MAX_BYTES = 4_000_000; // stay under the ~6 MB function request limit after base64
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/heic'];
@@ -52,6 +52,8 @@ export default async (req: Request, context: Context) => {
     mimeType: type,
   };
   if (photo.taggedIds.length === 0) return fail('Tag at least one friend besides yourself');
+  const friends = await friendsOf(uploaderId);
+  if (!photo.taggedIds.every((id) => friends.includes(id))) return fail('You can only tag friends', 403);
 
   await imageStore().set(photo.id, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
   await metaStore().setJSON(photo.id, photo);

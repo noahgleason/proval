@@ -1,17 +1,26 @@
+// Bone paper, ink, and one ultramarine signal. Approve/deny colors are the
+// only other hues, so status always reads at a glance.
 export const colors = {
-  bg: '#FFF7F5',
+  bg: '#F4F2EE',
   card: '#FFFFFF',
-  ink: '#2B1B24',
-  muted: '#8C7A84',
-  line: '#F0DFE0',
-  brand: '#E8517A',
-  brandSoft: '#FDE4EA',
-  approve: '#2DBE7E',
-  approveSoft: '#DDF6EA',
-  deny: '#F0544F',
-  denySoft: '#FDE3E2',
-  pending: '#F2A93B',
-  pendingSoft: '#FDF0DA',
+  ink: '#16141A',
+  muted: '#86827C',
+  line: '#E4E0D9',
+  brand: '#3A2BF5',
+  brandSoft: '#E8E6FE',
+  approve: '#14995A',
+  approveSoft: '#E1F3E9',
+  deny: '#E0443F',
+  denySoft: '#FBE6E5',
+  pending: '#A8741A',
+  pendingSoft: '#F6EDDB',
+  scrim: 'rgba(22,20,26,0.55)',
 };
 
-export const radius = { sm: 10, md: 16, lg: 24, pill: 999 };
+export const radius = { sm: 10, md: 16, lg: 26, pill: 999 };
+
+export const type = {
+  display: { fontSize: 30, fontWeight: '800', letterSpacing: -1.2 },
+  title: { fontSize: 22, fontWeight: '800', letterSpacing: -0.6 },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase' },
+} as const;

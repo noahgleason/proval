@@ -1,4 +1,14 @@
-import type { Decision, Photo, ReactionId, Review } from './types';
+import {
+  friendStateFor,
+  isExpired,
+  pairKey,
+  type Decision,
+  type FriendState,
+  type Friendship,
+  type Photo,
+  type ReactionId,
+  type Review,
+} from './types';
 
 /**
  * Talks to the Netlify Functions backend when EXPO_PUBLIC_API_URL is set
@@ -33,6 +43,11 @@ export interface Api {
   myPosts(userId: string): Promise<Photo[]>;
   submit(input: NewPhoto): Promise<Photo>;
   review(input: ReviewInput): Promise<Photo>;
+  friends(userId: string): Promise<FriendState>;
+  /** Sends a friend request, or accepts theirs if they already asked you. */
+  addFriend(userId: string, otherId: string): Promise<FriendState>;
+  /** Declines a request, cancels yours, or unfriends. */
+  removeFriend(userId: string, otherId: string): Promise<FriendState>;
 }
 
 // ---------- Real backend ----------
@@ -70,60 +85,115 @@ const remoteApi: Api = {
   async review(input) {
     return withAbsoluteImage(await call<Photo>('/api/reviews', { method: 'POST', body: JSON.stringify(input) }));
   },
+  friends(userId) {
+    return call<FriendState>(`/api/friends?user=${encodeURIComponent(userId)}`);
+  },
+  addFriend(userId, otherId) {
+    return call<FriendState>('/api/friends', { method: 'POST', body: JSON.stringify({ userId, otherId }) });
+  },
+  removeFriend(userId, otherId) {
+    const q = `user=${encodeURIComponent(userId)}&other=${encodeURIComponent(otherId)}`;
+    return call<FriendState>(`/api/friends?${q}`, { method: 'DELETE' });
+  },
 };
 
 // ---------- Mock backend ----------
 
-const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+const hoursAgo = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString();
 
 let mockPhotos: Photo[] = [
   {
     id: 'm1',
-    uploaderId: 'mia',
-    caption: 'beach day ☀️',
-    taggedIds: ['ava', 'zoe'],
-    createdAt: daysAgo(0),
-    reviews: { zoe: { decision: 'approve', reaction: 'obsessed', at: daysAgo(0) } },
+    uploaderId: 'marcus',
+    caption: 'beach day',
+    taggedIds: ['ava', 'jordan'],
+    createdAt: hoursAgo(2),
+    reviews: { jordan: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(1) } },
     imageUrl: 'https://picsum.photos/seed/proval-beach/800/1000',
   },
   {
     id: 'm2',
-    uploaderId: 'zoe',
+    uploaderId: 'jordan',
     caption: 'birthday dinner!!',
-    taggedIds: ['ava', 'mia', 'lily'],
-    createdAt: daysAgo(1),
+    taggedIds: ['ava', 'marcus', 'priya'],
+    createdAt: hoursAgo(9),
     reviews: {},
     imageUrl: 'https://picsum.photos/seed/proval-dinner/800/1000',
   },
   {
     id: 'm3',
-    uploaderId: 'lily',
+    uploaderId: 'priya',
     caption: 'concert pics',
     taggedIds: ['ava'],
-    createdAt: daysAgo(1),
+    createdAt: hoursAgo(19),
     reviews: {},
     imageUrl: 'https://picsum.photos/seed/proval-concert/800/1000',
   },
   {
     id: 'm4',
     uploaderId: 'ava',
-    caption: 'formal 💃',
-    taggedIds: ['mia', 'emma'],
-    createdAt: daysAgo(2),
+    caption: 'formal',
+    taggedIds: ['marcus', 'priya'],
+    createdAt: hoursAgo(30),
     reviews: {
-      mia: { decision: 'approve', at: daysAgo(2) },
-      emma: { decision: 'deny', reaction: 'better_one', comment: 'use the one where im not blinking lol', at: daysAgo(1) },
+      marcus: { decision: 'approve', at: hoursAgo(28) },
+      priya: { decision: 'deny', reaction: 'better_one', comment: 'use the one where im not blinking lol', at: hoursAgo(26) },
     },
     imageUrl: 'https://picsum.photos/seed/proval-formal/800/1000',
   },
+  {
+    id: 'm5',
+    uploaderId: 'ava',
+    caption: 'road trip dump',
+    taggedIds: ['jordan', 'leo'],
+    createdAt: hoursAgo(50),
+    // Leo never answered, so the window closing counted as a yes.
+    reviews: { jordan: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(48) } },
+    imageUrl: 'https://picsum.photos/seed/proval-roadtrip/800/1000',
+  },
+  {
+    id: 'm6',
+    uploaderId: 'ava',
+    caption: 'gym mirror',
+    taggedIds: ['leo'],
+    createdAt: hoursAgo(5),
+    reviews: {},
+    imageUrl: 'https://picsum.photos/seed/proval-gym/800/1000',
+  },
+  {
+    id: 'm7',
+    uploaderId: 'ava',
+    caption: '',
+    taggedIds: ['marcus', 'jordan', 'priya'],
+    createdAt: hoursAgo(72),
+    reviews: {
+      marcus: { decision: 'approve', at: hoursAgo(70) },
+      jordan: { decision: 'approve', reaction: 'edit_first', comment: 'warm it up a bit', at: hoursAgo(69) },
+      priya: { decision: 'approve', at: hoursAgo(60) },
+    },
+    imageUrl: 'https://picsum.photos/seed/proval-lake/800/1000',
+  },
 ];
+
+// Ava, Marcus, Jordan, Priya and Leo are all friends. Sam has asked Ava; Noor knows nobody yet.
+const CORE = ['ava', 'marcus', 'jordan', 'priya', 'leo'];
+const mockFriendships = new Map<string, Friendship>(
+  CORE.flatMap((a, i) =>
+    CORE.slice(i + 1).map((b): [string, Friendship] => [pairKey(a, b), { from: a, to: b, status: 'accepted', at: hoursAgo(500) }]),
+  ),
+);
+mockFriendships.set(pairKey('sam', 'ava'), { from: 'sam', to: 'ava', status: 'pending', at: hoursAgo(3) });
+
+const mockFriendState = (userId: string) => friendStateFor(userId, [...mockFriendships.values()]);
 
 const wait = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
 const mockApi: Api = {
   async queue(userId) {
     await wait();
-    return mockPhotos.filter((p) => p.taggedIds.includes(userId) && !p.reviews[userId]);
+    return mockPhotos
+      .filter((p) => p.taggedIds.includes(userId) && !p.reviews[userId] && !isExpired(p))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   },
   async myPosts(userId) {
     await wait();
@@ -133,6 +203,8 @@ const mockApi: Api = {
   },
   async submit(input) {
     await wait();
+    const { friends } = mockFriendState(input.uploaderId);
+    if (!input.taggedIds.every((id) => friends.includes(id))) throw new Error('You can only tag friends');
     const photo: Photo = {
       id: `m${Date.now()}`,
       uploaderId: input.uploaderId,
@@ -149,9 +221,31 @@ const mockApi: Api = {
     await wait(100);
     const photo = mockPhotos.find((p) => p.id === photoId);
     if (!photo) throw new Error('Photo not found');
+    if (isExpired(photo)) throw new Error('Too late, this one already auto-approved');
     const review: Review = { decision, reaction, comment: comment?.trim() || undefined, at: new Date().toISOString() };
     photo.reviews = { ...photo.reviews, [reviewerId]: review };
     return photo;
+  },
+  async friends(userId) {
+    await wait(150);
+    return mockFriendState(userId);
+  },
+  async addFriend(userId, otherId) {
+    await wait(150);
+    if (userId === otherId) throw new Error('That’s you');
+    const key = pairKey(userId, otherId);
+    const existing = mockFriendships.get(key);
+    if (existing?.status === 'pending' && existing.to === userId) {
+      mockFriendships.set(key, { ...existing, status: 'accepted', at: new Date().toISOString() });
+    } else if (!existing) {
+      mockFriendships.set(key, { from: userId, to: otherId, status: 'pending', at: new Date().toISOString() });
+    }
+    return mockFriendState(userId);
+  },
+  async removeFriend(userId, otherId) {
+    await wait(150);
+    mockFriendships.delete(pairKey(userId, otherId));
+    return mockFriendState(userId);
   },
 };
 
