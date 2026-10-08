@@ -40,5 +40,6 @@ yarn-error.*
 /ios
 /android
 
-# Netlify
-.netlify/
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/

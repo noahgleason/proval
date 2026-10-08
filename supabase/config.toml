@@ -1,0 +1,15 @@
+# Only the bits Proval needs; `supabase init` would generate the full file.
+project_id = "proval"
+
+[auth]
+# Email one-time codes instead of magic links (no deep-link round trip).
+enable_signup = true
+
+[auth.email]
+enable_confirmations = false
+otp_length = 6
+otp_expiry = 600
+
+[functions.notify]
+# Called by database webhooks and cron, not by the app. It checks its own secret.
+verify_jwt = false

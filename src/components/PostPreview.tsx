@@ -40,7 +40,7 @@ export function PostPreview({ post, viewerId, onClose, onDecide }: Props) {
               <Avatar userId={author.id} size={32} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.author}>{author.name}</Text>
-                <Text style={styles.handle}>@{author.id}</Text>
+                <Text style={styles.handle}>@{author.username}</Text>
               </View>
               <Icon name="dots" size={20} color={colors.muted} />
             </View>
@@ -58,7 +58,7 @@ export function PostPreview({ post, viewerId, onClose, onDecide }: Props) {
             <View style={styles.body}>
               {!!post.caption && (
                 <Text style={styles.caption}>
-                  <Text style={styles.author}>{author.id} </Text>
+                  <Text style={styles.author}>{author.username} </Text>
                   {post.caption}
                 </Text>
               )}

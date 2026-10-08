@@ -1,10 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { api } from '../api';
+import { api, errorMessage } from '../api';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { PostPreview } from '../components/PostPreview';
+import { useLoader } from '../hooks/useLoader';
 import { colors, radius, type } from '../theme';
 import { AUTO_APPROVE_HOURS } from '../types';
 import { userById } from '../users';
@@ -20,17 +21,12 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [friendIds, setFriendIds] = useState<string[] | null>(null);
   const [previewing, setPreviewing] = useState(false);
 
-  useEffect(() => {
-    api.friends(userId).then(
-      (s) => setFriendIds(s.friends),
-      () => setFriendIds([]),
-    );
-  }, [userId]);
-
-  const friends = (friendIds ?? []).map(userById);
+  // Refreshes on focus, so friends you just added show up.
+  const fetchFriends = useCallback(async () => (await api.friends(userId)).friends, [userId]);
+  const { data: friendIds, loading: loadingFriends } = useLoader<string[]>(fetchFriends, []);
+  const friends = friendIds.map(userById);
 
   const pick = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -71,7 +67,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
       setTagged([]);
       onSubmitted();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Upload failed');
+      setError(errorMessage(e, 'Upload failed'));
     } finally {
       setBusy(false);
     }
@@ -99,7 +95,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
       </Pressable>
 
       <Text style={styles.label}>Who’s in it</Text>
-      {friendIds?.length === 0 && (
+      {!loadingFriends && friendIds.length === 0 && (
         <Text style={styles.hint}>No friends yet. Add some from your profile (tap your name up top).</Text>
       )}
       <View style={styles.friends}>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -21,15 +21,13 @@ type Props = {
   onUndo: () => void;
 };
 
-/** Pops up after a swipe so you can add "last resort", "crop me out", or a note. */
+/**
+ * Pops up after a swipe so you can add "last resort", "crop me out", or a note.
+ * Give it a `key` per photo + decision so the note starts empty each time.
+ */
 export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
   const [reaction, setReaction] = useState<ReactionId | undefined>();
   const [comment, setComment] = useState('');
-
-  useEffect(() => {
-    setReaction(undefined);
-    setComment('');
-  }, [decision]);
 
   if (!decision) return null;
   const approve = decision === 'approve';

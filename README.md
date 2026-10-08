@@ -1,73 +1,115 @@
 # proval
 
-**Ask before you post.** Your friends send you the photos they want to post that you're in. You swipe through them Tinder-style: right to approve, left to deny. You can add a note like *"last resort"*, *"crop me out"* or *"use the one where I'm smiling"*. The photo only gets the green light once everyone in it says yes.
+**Ask before you post.** When you want to post a photo with friends in it, you send it to them first. They swipe right to approve or left to deny, with a reaction like *Crop me out* or a note. The photo is cleared once everyone says yes. One no blocks it, and anyone who stays quiet for 24 hours counts as a yes.
 
-## What's here
+## Screens
 
-| Part | Where | What it does |
-| --- | --- | --- |
-| Mobile app | `App.tsx`, `src/` | Expo (React Native + TypeScript) for iOS and Android |
-| API | `netlify/functions/` | Netlify Functions: submit photos, get your queue, send reviews |
-| Storage | Netlify Blobs | Photos and review data. No separate database needed |
+| Screen | What it does |
+| --- | --- |
+| **Welcome / Sign in** | Email one-time code, no passwords |
+| **Onboarding** | Pick a name and @username |
+| **Dashboard** | Every photo you've sent, as a grid or list. Filter by Cleared / Waiting / Blocked. Tap one for each friend's answer, or withdraw it |
+| **Review** | The carousel. Swipe or tap. Preview the post as it would look in a feed. Report a photo or block the sender from the ••• menu |
+| **Ask** | Pick a photo, tag friends, add a caption, preview, send |
+| **Profile** | Friend requests, search, friends, blocked people, privacy policy, terms, sign out, delete account |
 
-### Screens
-- **Dashboard**: every photo you've asked about, as a grid or a list. Tap the Cleared / Waiting / Blocked counts to filter. Tap a photo to see each friend's answer and note.
-- **Review**: the carousel. Swipe right to approve, left to deny, or use the buttons. Tap the eye on a card to preview the post as it would appear in a feed (photo, caption, who's tagged) and decide from there. A sheet then pops up with quick reactions (Obsessed, Last resort, Only if no better one, Edit me first, Crop me out, Delete this forever) and an optional comment. You can undo from there.
-- **Ask**: pick a photo, tag the friends who are in it, add a caption, preview the post, and send for approval.
-- **Profile** (tap your name): accept or decline friend requests, find people by name or @username, and see your friends.
+## Rules (enforced by the database, not just the app)
 
-### The rules
 - You can only tag accepted friends. Friend requests need a yes from the other person.
-- Everyone tagged must approve, and a single deny blocks the post.
-- Requests auto-approve after 24 hours (`AUTO_APPROVE_HOURS` in `src/types.ts`). Anyone who stays silent counts as a yes, and late reviews are rejected.
+- A photo, its tags, and its image are visible only to the sender and the people tagged. Each answer is visible only to the sender and the person who gave it.
+- One answer per person, and only inside the 24-hour window (`AUTO_APPROVE_HOURS` in `src/types.ts` and `answer_window()` in SQL).
+- Blocking removes the friendship and stops adds, tags, and photos in both directions.
+- Deleting your account removes your profile, friendships, photos, images, and answers.
 
-## Run it
+## Run it (demo mode)
 
 ```bash
 npm install
-npx expo start        # scan the QR code with Expo Go on your phone
+npx expo start
 ```
 
-Out of the box the app runs on **demo data**, so you can try it right away. Tap your name in the top right to switch between the five placeholder friends (Ava, Marcus, Jordan, Priya, Leo) and see both sides of a review.
+With no Supabase keys, the app runs on built-in demo data. Tap your name, then use the account switcher at the bottom of Profile to see both sides of a request.
 
-### Use the real backend (Netlify)
+`expo-dev-client` is installed, so `expo start` targets a development build by default. Press `s` in the terminal to switch to Expo Go. Push notifications need a development build.
 
-1. Push this repo to GitHub, then on Netlify choose **Add new project → Import from Git** and pick it. `netlify.toml` already has the settings, and Blobs turns on automatically.
-2. Create a `.env.local` file in the project root:
+## Project layout
+
+```
+src/app/            Routes (Expo Router). (tabs)/ is Dashboard, Review, Ask
+src/screens/        The big screens the routes render
+src/components/     Icon set, swipe card, sheets, post preview
+src/api/            One Api interface → mock.ts (demo) and supabase.ts (real)
+src/session.tsx     Sign-in state, profile, sign out, delete account
+src/notifications.ts Push registration and tap handling
+src/legal.ts        Privacy policy and terms text
+supabase/           Database migration and the push notification function
+```
+
+## Connect Supabase
+
+1. **Create a project** at supabase.com (the free tier is fine).
+2. **Create the database.** Open SQL Editor, paste `supabase/migrations/20261008000000_init.sql`, and run it. With the Supabase CLI you can run `npx supabase link` and then `npx supabase db push` instead.
+3. **Turn on email codes.** Go to Authentication → Sign In / Providers, make sure Email is enabled, and turn off "Confirm email". Then go to Authentication → Email Templates → **Magic Link** and replace the body with something like:
+   ```html
+   <h2>Your Proval code</h2>
+   <p>Enter this code in the app: <strong>{{ .Token }}</strong></p>
    ```
-   EXPO_PUBLIC_API_URL=https://<your-site>.netlify.app
+   Without `{{ .Token }}` the email only has a link, and the app needs the code.
+4. **Add the keys** to `.env.local` (see `.env.example`), from Project Settings → API:
    ```
-3. Restart `npx expo start`.
+   EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+   EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<publishable key>
+   ```
+   Restart `npx expo start`.
+5. **Send email to real people.** Supabase's built-in email only reaches your own team members and sends 2 emails an hour. For anyone else, add custom SMTP under Authentication → Emails → SMTP Settings. Resend is easiest; it needs a domain you own.
 
-To run the API on your own computer instead, use `npm run api` (Netlify Dev on http://localhost:8888) and point `EXPO_PUBLIC_API_URL` at your computer's local IP, port 8888.
+### Push notifications
 
-### API
+The `notify` function sends pushes for: new photo requests, answers, everyone approving, friend requests and accepts, a reminder 3 hours before auto-approve, and "cleared by silence".
 
-| Method | Path | Body / query |
-| --- | --- | --- |
-| POST | `/api/photos` | `{ uploaderId, caption, taggedIds[], imageBase64, mimeType }` |
-| GET | `/api/photos/:id/image` | Image bytes (Blobs has no public URLs, so images go through here) |
-| GET | `/api/queue?user=ava` | Photos waiting on Ava that are still inside the 24h window, oldest first |
-| GET | `/api/posts?user=ava` | Photos Ava submitted, with every review |
-| GET | `/api/friends?user=ava` | `{ friends, incoming, outgoing }` |
-| POST | `/api/friends` | `{ userId, otherId }`: send a request, or accept theirs |
-| DELETE | `/api/friends?user=ava&other=leo` | Decline, cancel, or unfriend |
-| POST | `/api/reviews` | `{ photoId, reviewerId, decision: "approve" \| "deny", reaction?, comment? }` |
+1. Deploy it, then set a secret it checks:
+   ```bash
+   npx supabase functions deploy notify --no-verify-jwt
+   npx supabase secrets set NOTIFY_SECRET=<a long random string>
+   ```
+2. In Database → Webhooks, create three webhooks pointing at the function (HTTP POST to `https://<ref>.supabase.co/functions/v1/notify`, with header `x-notify-secret: <NOTIFY_SECRET>`):
+   - `photo_tags`: Insert
+   - `reviews`: Insert
+   - `friendships`: Insert and Update
+3. For the hourly reminders, enable the `pg_cron` and `pg_net` extensions, then run:
+   ```sql
+   select cron.schedule('proval-notify-hourly', '0 * * * *', $$
+     select net.http_post(
+       url := 'https://<ref>.supabase.co/functions/v1/notify',
+       headers := jsonb_build_object('Content-Type', 'application/json', 'x-notify-secret', '<NOTIFY_SECRET>'),
+       body := '{"type":"cron"}'::jsonb
+     );
+   $$);
+   ```
+4. The app needs an EAS project id to get push tokens: run `npx eas-cli@latest init` once.
 
-## Checks
+### Moderation
+
+Reports land in the `reports` table. Check them in Table Editor, act on them (delete the photo, or delete the user under Authentication → Users), and set `status` to `actioned` or `dismissed`. App Store rules expect you to act on reports within about 24 hours.
+
+## Build and ship (EAS)
 
 ```bash
-npm run typecheck     # app + functions
-npx expo-doctor
+npx eas-cli@latest login
+npx eas-cli@latest init                                      # links the project, sets the push project id
+npx eas-cli@latest build --profile development --platform ios   # dev build for your phone
+npx eas-cli@latest build --profile production --platform ios    # store build
+npx eas-cli@latest submit --platform ios                     # to App Store Connect / TestFlight
 ```
 
-## Next up
+Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` as EAS environment variables (`eas env:create`) so cloud builds get them.
 
-- **Real accounts.** Users are hard-coded placeholders in `src/users.ts`, and the API trusts whatever user id it receives. Before real people use this, add sign-in (e.g. Clerk, Supabase Auth or Firebase Auth) and verify the user on every request.
-- **Friends list.** Add and invite friends instead of using the fixed five.
-- **Push notifications** when someone asks you, and when everyone has answered.
-- **Auto-approve timer**, e.g. "if no answer in 1 hour, it counts as yes" (optional per photo).
-- **Pick the best from a set.** Upload several shots and let the group vote.
-- **Review by link**, so friends without the app can still approve.
-- **Expo Router.** Move the three tabs from `App.tsx` into `src/app/` routes as screens grow.
-- **Bigger photos.** Uploads go through a function as base64, capped at about 4 MB, which is fine at the current compression. For full-res photos, upload in chunks or use storage with direct uploads.
+### Before submitting to the App Store
+
+- [ ] Apple Developer account ($99/yr). Check that the name "Proval" and the bundle id `com.proval.app` are available
+- [ ] Supabase set up as above, with custom SMTP so codes reach real users
+- [ ] Replace `CONTACT_EMAIL` in `src/legal.ts` with an inbox you read, and have the privacy policy and terms reviewed
+- [ ] Host the privacy policy at a public URL (App Store Connect requires one)
+- [ ] A test account for Apple's reviewer (an email whose code you can read, or a reviewer bypass)
+- [ ] Screenshots, description, age rating (12+ is typical for user-generated photos), privacy questionnaire
+- [ ] A plan for checking reports daily

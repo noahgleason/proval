@@ -1,7 +1,9 @@
-// Shared data model. The Netlify functions import this file too.
+// Shared data model. Keep the rules here in sync with supabase/migrations.
 
 export type User = {
   id: string;
+  /** Lowercase handle, shown as @username. */
+  username: string;
   name: string;
   color: string;
 };
@@ -89,7 +91,7 @@ export type Photo = {
   imageUrl: string;
 };
 
-/** Silence counts as a yes once this window passes. */
+/** Silence counts as a yes once this window passes. Mirrors answer_window() in SQL. */
 export const AUTO_APPROVE_HOURS = 24;
 
 /** When unanswered requests on this photo turn into approvals. */
@@ -129,3 +131,12 @@ export function timeLeft(photo: Pick<Photo, 'createdAt'>, now = Date.now()): str
 export function reactionFor(id?: ReactionId): Reaction | undefined {
   return REACTIONS.find((r) => r.id === id);
 }
+
+export const REPORT_REASONS = [
+  'Nudity or sexual content',
+  'Harassment or bullying',
+  'Violence or self-harm',
+  'Hate speech',
+  'Spam or scam',
+  'Something else',
+] as const;

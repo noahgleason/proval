@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -11,9 +12,10 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { api } from '../api';
+import { api, errorMessage } from '../api';
 import { Avatar } from '../components/Avatar';
 import { Icon, REACTION_ICON, type IconName } from '../components/Icon';
+import { useLoader } from '../hooks/useLoader';
 import { answerOf, reactionFor, statusOf, timeLeft, type Answer, type Photo, type PhotoStatus } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
@@ -40,26 +42,32 @@ const GUTTER = 20;
 
 /** Everything you've asked about: what's cleared, what's waiting, what got blocked. */
 export function DashboardScreen({ userId }: Props) {
-  const [posts, setPosts] = useState<Photo[]>([]);
-  const [loading, setLoading] = useState(true);
+  const fetchPosts = useCallback(() => api.myPosts(userId), [userId]);
+  const { data: posts, setData: setPosts, loading, error, reload } = useLoader<Photo[]>(fetchPosts, []);
   const [filter, setFilter] = useState<PhotoStatus | null>(null);
   const [view, setView] = useState<Layout>('grid');
   const [open, setOpen] = useState<Photo | null>(null);
   const { width } = useWindowDimensions();
   const tile = (width - GUTTER * 2 - GAP * 2) / 3;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setPosts(await api.myPosts(userId));
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const withdraw = (photo: Photo) => {
+    Alert.alert('Withdraw this request?', 'The photo is deleted from Proval and your friends stop seeing it.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Withdraw',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.deletePhoto(userId, photo.id);
+            setOpen(null);
+            setPosts((ps) => ps.filter((p) => p.id !== photo.id));
+          } catch (e) {
+            Alert.alert('Couldn’t withdraw it', errorMessage(e));
+          }
+        },
+      },
+    ]);
+  };
 
   const withStatus = useMemo(() => posts.map((p) => ({ photo: p, status: statusOf(p) })), [posts]);
   const counts = useMemo(() => {
@@ -110,6 +118,7 @@ export function DashboardScreen({ userId }: Props) {
           );
         })}
       </View>
+      {!!error && <Text style={styles.error}>{error}</Text>}
     </View>
   );
 
@@ -131,7 +140,7 @@ export function DashboardScreen({ userId }: Props) {
         numColumns={view === 'grid' ? 3 : 1}
         columnWrapperStyle={view === 'grid' ? { gap: GAP } : undefined}
         contentContainerStyle={[styles.list, { gap: view === 'grid' ? GAP : 12 }]}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.ink} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor={colors.ink} />}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
         renderItem={({ item }) =>
@@ -161,6 +170,10 @@ export function DashboardScreen({ userId }: Props) {
             <View style={styles.card}>
               <PostDetails photo={open} status={statusOf(open)} hideThumb />
             </View>
+            <Pressable onPress={() => withdraw(open)} style={styles.withdraw}>
+              <Icon name="trash" size={18} color={colors.deny} weight={2} />
+              <Text style={styles.withdrawText}>Withdraw request</Text>
+            </Pressable>
           </ScrollView>
         )}
       </Modal>
@@ -306,5 +319,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  withdraw: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  withdrawText: { color: colors.deny, fontWeight: '700', fontSize: 16 },
+  error: { color: colors.deny },
   hero: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.lg, backgroundColor: colors.line },
 });
