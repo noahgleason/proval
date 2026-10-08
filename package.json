@@ -1,0 +1,28 @@
+{
+  "name": "proval",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4",
+    "expo": "~57.0.27",
+    "expo-image-picker": "~57.0.20",
+    "expo-status-bar": "~57.0.1",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^6.0.2",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p netlify",
+    "api": "npx netlify-cli dev"
+  },
+  "private": true
+}

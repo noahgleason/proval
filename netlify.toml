@@ -1,0 +1,9 @@
+# Backend only: Netlify hosts the API (Functions) and stores photos in Blobs.
+# The mobile app itself is built with Expo/EAS, not Netlify.
+[build]
+  command = "echo 'API only'"
+  publish = "netlify/public"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"

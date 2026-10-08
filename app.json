@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "Proval",
+    "slug": "proval",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.proval.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.proval.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "proval",
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Proval needs your photos so you can ask friends before posting."
+        }
+      ]
+    ]
+  }
+}
