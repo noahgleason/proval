@@ -12,6 +12,8 @@ type Session = {
   status: Status;
   /** Signed-in user id ('' when signed out). */
   userId: string;
+  /** The email of the signed-in auth account (Google or email code), if any. */
+  email: string | null;
   me: User | null;
   sendCode(email: string): Promise<void>;
   verifyCode(email: string, code: string): Promise<void>;
@@ -39,6 +41,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>(usingMock ? 'ready' : 'loading');
   const [userId, setUserId] = useState(usingMock ? DEMO_USERS[0].id : '');
   const [me, setMe] = useState<User | null>(usingMock ? DEMO_USERS[0] : null);
+  const [email, setEmail] = useState<string | null>(null);
 
   // Supabase: follow the auth session, then look up the profile row.
   useEffect(() => {
@@ -64,8 +67,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    client.auth.getSession().then(({ data }) => loadProfile(data.session?.user.id));
+    client.auth.getSession().then(({ data }) => {
+      setEmail(data.session?.user.email ?? null);
+      loadProfile(data.session?.user.id);
+    });
     const { data: sub } = client.auth.onAuthStateChange((_event, session) => {
+      setEmail(session?.user.email ?? null);
       // Supabase advises against awaiting its own calls inside this callback.
       setTimeout(() => loadProfile(session?.user.id), 0);
     });
@@ -145,8 +152,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, userId, me, sendCode, verifyCode, createProfile, signOut, deleteAccount, switchUser }),
-    [status, userId, me, sendCode, verifyCode, createProfile, signOut, deleteAccount, switchUser],
+    () => ({ status, userId, email, me, sendCode, verifyCode, createProfile, signOut, deleteAccount, switchUser }),
+    [status, userId, email, me, sendCode, verifyCode, createProfile, signOut, deleteAccount, switchUser],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

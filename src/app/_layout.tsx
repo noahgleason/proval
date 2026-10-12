@@ -2,9 +2,10 @@ import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { PhoneFrame } from '../components/PhoneFrame';
 import { urlFromResponse } from '../notifications';
 import { SessionProvider, useSession } from '../session';
 import { colors } from '../theme';
@@ -15,7 +16,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <SessionProvider>
           <StatusBar style="dark" />
-          <RootStack />
+          <PhoneFrame>
+            <RootStack />
+          </PhoneFrame>
         </SessionProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
@@ -28,7 +31,7 @@ function RootStack() {
 
   // Tapping a notification opens the screen it's about.
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || Platform.OS === 'web') return;
     Notifications.getLastNotificationResponseAsync().then((r) => {
       const url = urlFromResponse(r);
       if (url) router.navigate(url as never);

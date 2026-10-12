@@ -12,6 +12,7 @@ import {
 import { REACTIONS, type Decision, type ReactionId } from '../types';
 import { colors, radius, type } from '../theme';
 import { Icon, REACTION_ICON } from './Icon';
+import { PhoneFrame } from './PhoneFrame';
 
 type Props = {
   decision: Decision | null;
@@ -36,58 +37,60 @@ export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
 
   return (
     <Modal transparent animationType="slide" visible onRequestClose={onUndo}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
-        <View style={styles.sheet}>
-          <View style={styles.grabber} />
-          <View style={styles.head}>
-            <View style={[styles.verdict, { backgroundColor: accent }]}>
-              <Icon name={approve ? 'check' : 'x'} size={20} color="#fff" weight={2.6} />
+      <PhoneFrame transparent>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
+          <View style={styles.sheet}>
+            <View style={styles.grabber} />
+            <View style={styles.head}>
+              <View style={[styles.verdict, { backgroundColor: accent }]}>
+                <Icon name={approve ? 'check' : 'x'} size={20} color="#fff" weight={2.6} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.title}>{approve ? 'Approved' : 'Denied'}</Text>
+                <Text style={styles.sub}>Tell {askerName || 'them'} where you stand. Optional.</Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{approve ? 'Approved' : 'Denied'}</Text>
-              <Text style={styles.sub}>Tell {askerName || 'them'} where you stand. Optional.</Text>
+
+            <View style={styles.chips}>
+              {options.map((r) => {
+                const on = reaction === r.id;
+                return (
+                  <Pressable
+                    key={r.id}
+                    onPress={() => setReaction(on ? undefined : r.id)}
+                    style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
+                  >
+                    <Icon name={REACTION_ICON[r.id]} size={16} color={on ? '#fff' : colors.ink} weight={1.9} />
+                    <Text style={[styles.chipText, on && { color: '#fff' }]}>{r.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <TextInput
+              value={comment}
+              onChangeText={setComment}
+              placeholder={approve ? 'e.g. cute! maybe brighten it a little' : 'e.g. use the one where I’m smiling'}
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+              maxLength={200}
+              multiline
+            />
+
+            <View style={styles.row}>
+              <Pressable onPress={onUndo} style={[styles.btn, styles.ghost]}>
+                <Icon name="undo" size={18} color={colors.ink} weight={2} />
+                <Text style={[styles.btnText, { color: colors.ink }]}>Undo</Text>
+              </Pressable>
+              <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, styles.primary]}>
+                <Text style={[styles.btnText, { color: '#fff' }]}>
+                  {reaction || comment.trim() ? 'Send' : 'Skip note'}
+                </Text>
+              </Pressable>
             </View>
           </View>
-
-          <View style={styles.chips}>
-            {options.map((r) => {
-              const on = reaction === r.id;
-              return (
-                <Pressable
-                  key={r.id}
-                  onPress={() => setReaction(on ? undefined : r.id)}
-                  style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
-                >
-                  <Icon name={REACTION_ICON[r.id]} size={16} color={on ? '#fff' : colors.ink} weight={1.9} />
-                  <Text style={[styles.chipText, on && { color: '#fff' }]}>{r.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-
-          <TextInput
-            value={comment}
-            onChangeText={setComment}
-            placeholder={approve ? 'e.g. cute! maybe brighten it a little' : 'e.g. use the one where I’m smiling'}
-            placeholderTextColor={colors.muted}
-            style={styles.input}
-            maxLength={200}
-            multiline
-          />
-
-          <View style={styles.row}>
-            <Pressable onPress={onUndo} style={[styles.btn, styles.ghost]}>
-              <Icon name="undo" size={18} color={colors.ink} weight={2} />
-              <Text style={[styles.btnText, { color: colors.ink }]}>Undo</Text>
-            </Pressable>
-            <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, styles.primary]}>
-              <Text style={[styles.btnText, { color: '#fff' }]}>
-                {reaction || comment.trim() ? 'Send' : 'Skip note'}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </PhoneFrame>
     </Modal>
   );
 }

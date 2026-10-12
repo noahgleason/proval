@@ -1,0 +1,16 @@
+# Netlify builds the web version of the Expo app (a single-page app in dist/).
+# EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set
+# in Netlify's environment variables; they're inlined at build time.
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Single-page app: every path (including the OAuth return and refreshes)
+# serves index.html and Expo Router takes it from there.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

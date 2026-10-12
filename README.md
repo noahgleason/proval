@@ -6,7 +6,7 @@
 
 | Screen | What it does |
 | --- | --- |
-| **Welcome / Sign in** | Email one-time code, no passwords |
+| **Welcome / Sign in** | Google, or an email one-time code. No passwords |
 | **Onboarding** | Pick a name and @username |
 | **Dashboard** | Every photo you've sent, as a grid or list. Filter by Cleared / Waiting / Blocked. Tap one for each friend's answer, or withdraw it |
 | **Review** | The carousel. Swipe or tap. Preview the post as it would look in a feed. Report a photo or block the sender from the ••• menu |
@@ -62,6 +62,16 @@ supabase/           Database migration and the push notification function
    ```
    Restart `npx expo start`.
 5. **Send email to real people.** Supabase's built-in email only reaches your own team members and sends 2 emails an hour. For anyone else, add custom SMTP under Authentication → Emails → SMTP Settings. Resend is easiest; it needs a domain you own.
+
+### Sign in with Google
+
+Google sign-in is on the welcome screen (email codes still work too). Providers are listed in `OAUTH_PROVIDERS` in `src/lib/auth.ts`. To add Apple later, enable it in Supabase and add `{ id: 'apple', label: 'Continue with Apple' }` there.
+
+On web, the OAuth redirect goes back to the current origin, so localhost, Netlify deploy previews, and production all work as long as each one is allowed under Supabase → Authentication → URL Configuration. Native builds return to `proval://`, so add that too.
+
+### Web (Netlify)
+
+`netlify.toml` builds with `npx expo export --platform web` into `dist/`, with a `/* → /index.html` fallback. Set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` in Netlify's environment variables. Push notifications are native only.
 
 ### Push notifications
 

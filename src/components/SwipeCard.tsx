@@ -1,6 +1,6 @@
 import * as Haptics from 'expo-haptics';
 import { useImperativeHandle, type Ref } from 'react';
-import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -9,6 +9,7 @@ import { colors, radius } from '../theme';
 import { userById } from '../users';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
+import { useScreenWidth } from './PhoneFrame';
 
 export type SwipeCardHandle = { swipe: (d: Decision) => void };
 
@@ -26,7 +27,7 @@ const decided = (d: Decision) =>
 
 /** Tinder-style card: drag right to approve, left to deny. Runs on the UI thread. */
 export function SwipeCard({ photo, onSwiped, onPreview, onMore, ref }: Props) {
-  const { width } = useWindowDimensions();
+  const width = useScreenWidth();
   const threshold = width * 0.28;
   const x = useSharedValue(0);
   const y = useSharedValue(0);

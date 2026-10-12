@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { errorMessage, usingMock } from '../api';
 import { Icon, LogoMark, type IconName } from '../components/Icon';
+import { OAUTH_PROVIDERS, signInWithProvider } from '../lib/auth';
 import { AUTO_APPROVE_HOURS } from '../types';
 import { colors, radius, type } from '../theme';
 
@@ -17,6 +20,22 @@ const STEPS: { icon: IconName; title: string; body: string }[] = [
 
 export default function Welcome() {
   const insets = useSafeAreaInsets();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const providers = usingMock ? [] : OAUTH_PROVIDERS;
+
+  const signIn = async (id: (typeof OAUTH_PROVIDERS)[number]['id']) => {
+    setBusy(id);
+    setError(null);
+    try {
+      await signInWithProvider(id);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 16 }]}>
       <View style={styles.brand}>
@@ -40,9 +59,28 @@ export default function Welcome() {
       </View>
 
       <View style={{ flex: 1 }} />
-      <Pressable onPress={() => router.push('/sign-in')} style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}>
-        <Text style={styles.ctaText}>Get started</Text>
-      </Pressable>
+      {!!error && <Text style={styles.error}>{error}</Text>}
+      <View style={styles.ctas}>
+        {providers.map((p) => (
+          <Pressable
+            key={p.id}
+            onPress={() => signIn(p.id)}
+            disabled={!!busy}
+            style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
+          >
+            {busy === p.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{p.label}</Text>}
+          </Pressable>
+        ))}
+        <Pressable
+          onPress={() => router.push('/sign-in')}
+          disabled={!!busy}
+          style={({ pressed }) => [providers.length ? styles.secondary : styles.cta, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={providers.length ? styles.secondaryText : styles.ctaText}>
+            {providers.length ? 'Continue with email' : 'Get started'}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -64,6 +102,10 @@ const styles = StyleSheet.create({
   },
   stepTitle: { ...type.title, fontSize: 17, letterSpacing: -0.3, color: colors.ink },
   stepBody: { color: colors.muted, lineHeight: 20, marginTop: 2 },
+  error: { color: colors.deny, marginBottom: 12 },
+  ctas: { gap: 10 },
   cta: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 18, alignItems: 'center' },
   ctaText: { color: '#fff', fontWeight: '700', fontSize: 17 },
+  secondary: { backgroundColor: colors.card, borderRadius: radius.pill, paddingVertical: 18, alignItems: 'center' },
+  secondaryText: { color: colors.ink, fontWeight: '700', fontSize: 17 },
 });

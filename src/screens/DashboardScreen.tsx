@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Image,
   Modal,
@@ -9,16 +8,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import { api, errorMessage } from '../api';
 import { Avatar } from '../components/Avatar';
 import { Icon, REACTION_ICON, type IconName } from '../components/Icon';
 import { useLoader } from '../hooks/useLoader';
+import { showAlert } from '../lib/alert';
 import { answerOf, reactionFor, statusOf, timeLeft, type Answer, type Photo, type PhotoStatus } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
+import { PhoneFrame, useScreenWidth } from '../components/PhoneFrame';
 
 type Props = { userId: string };
 type Layout = 'grid' | 'list';
@@ -47,11 +47,11 @@ export function DashboardScreen({ userId }: Props) {
   const [filter, setFilter] = useState<PhotoStatus | null>(null);
   const [view, setView] = useState<Layout>('grid');
   const [open, setOpen] = useState<Photo | null>(null);
-  const { width } = useWindowDimensions();
+  const width = useScreenWidth();
   const tile = (width - GUTTER * 2 - GAP * 2) / 3;
 
   const withdraw = (photo: Photo) => {
-    Alert.alert('Withdraw this request?', 'The photo is deleted from Proval and your friends stop seeing it.', [
+    showAlert('Withdraw this request?', 'The photo is deleted from Proval and your friends stop seeing it.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Withdraw',
@@ -62,7 +62,7 @@ export function DashboardScreen({ userId }: Props) {
             setOpen(null);
             setPosts((ps) => ps.filter((p) => p.id !== photo.id));
           } catch (e) {
-            Alert.alert('Couldn’t withdraw it', errorMessage(e));
+            showAlert('Couldn’t withdraw it', errorMessage(e));
           }
         },
       },
@@ -158,24 +158,26 @@ export function DashboardScreen({ userId }: Props) {
       />
 
       <Modal visible={!!open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(null)}>
-        {open && (
-          <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={styles.sheet}>
-            <View style={styles.sheetTop}>
-              <Text style={styles.sheetTitle}>Request</Text>
-              <Pressable onPress={() => setOpen(null)} style={styles.close} accessibilityLabel="Close">
-                <Icon name="x" size={18} color={colors.ink} weight={2.2} />
+        <PhoneFrame>
+          {open && (
+            <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={styles.sheet}>
+              <View style={styles.sheetTop}>
+                <Text style={styles.sheetTitle}>Request</Text>
+                <Pressable onPress={() => setOpen(null)} style={styles.close} accessibilityLabel="Close">
+                  <Icon name="x" size={18} color={colors.ink} weight={2.2} />
+                </Pressable>
+              </View>
+              <Image source={{ uri: open.imageUrl }} style={styles.hero} />
+              <View style={styles.card}>
+                <PostDetails photo={open} status={statusOf(open)} hideThumb />
+              </View>
+              <Pressable onPress={() => withdraw(open)} style={styles.withdraw}>
+                <Icon name="trash" size={18} color={colors.deny} weight={2} />
+                <Text style={styles.withdrawText}>Withdraw request</Text>
               </Pressable>
-            </View>
-            <Image source={{ uri: open.imageUrl }} style={styles.hero} />
-            <View style={styles.card}>
-              <PostDetails photo={open} status={statusOf(open)} hideThumb />
-            </View>
-            <Pressable onPress={() => withdraw(open)} style={styles.withdraw}>
-              <Icon name="trash" size={18} color={colors.deny} weight={2} />
-              <Text style={styles.withdrawText}>Withdraw request</Text>
-            </Pressable>
-          </ScrollView>
-        )}
+            </ScrollView>
+          )}
+        </PhoneFrame>
       </Modal>
     </>
   );

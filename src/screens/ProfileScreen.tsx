@@ -1,12 +1,13 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { api, errorMessage, usingMock } from '../api';
 import { DEMO_USERS } from '../api/mock';
 import { ActionSheet } from '../components/ActionSheet';
 import { Avatar } from '../components/Avatar';
 import { Icon, type IconName } from '../components/Icon';
 import { useLoader } from '../hooks/useLoader';
+import { showAlert } from '../lib/alert';
 import { useSession } from '../session';
 import type { FriendState, User } from '../types';
 import { colors, radius, type } from '../theme';
@@ -16,7 +17,7 @@ const EMPTY: FriendState = { friends: [], incoming: [], outgoing: [] };
 
 /** You, your friends, requests, blocked people, and account settings. */
 export function ProfileScreen() {
-  const { userId, me, signOut, deleteAccount, switchUser } = useSession();
+  const { userId, email, me, signOut, deleteAccount, switchUser } = useSession();
   const fetchAll = useCallback(
     async () => ({ friends: await api.friends(userId), blocked: await api.blocked(userId) }),
     [userId],
@@ -55,7 +56,7 @@ export function ProfileScreen() {
   const block = (other: User) => {
     setTimeout(
       () =>
-        Alert.alert(`Block ${other.name}?`, 'They won’t be able to find you, add you, or send you photos. They aren’t told.', [
+        showAlert(`Block ${other.name}?`, 'They won’t be able to find you, add you, or send you photos. They aren’t told.', [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Block',
@@ -87,7 +88,7 @@ export function ProfileScreen() {
   };
 
   const confirmDelete = () => {
-    Alert.alert(
+    showAlert(
       'Delete your account?',
       'Your profile, friends, every photo you sent, and your answers are deleted for good. This can’t be undone.',
       [
@@ -101,7 +102,7 @@ export function ProfileScreen() {
               await deleteAccount();
             } catch (e) {
               setLeaving(false);
-              Alert.alert('Couldn’t delete your account', errorMessage(e));
+              showAlert('Couldn’t delete your account', errorMessage(e));
             }
           },
         },
@@ -120,6 +121,7 @@ export function ProfileScreen() {
           <Text style={styles.handle}>
             @{me?.username} · {state.friends.length} {state.friends.length === 1 ? 'friend' : 'friends'}
           </Text>
+          {!!email && <Text style={styles.sub}>Signed in as {email}</Text>}
         </View>
         <Pressable onPress={() => router.back()} style={styles.close} accessibilityLabel="Close">
           <Icon name="x" size={18} color={colors.ink} weight={2.2} />

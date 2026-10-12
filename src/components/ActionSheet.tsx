@@ -2,6 +2,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius } from '../theme';
 import { Icon, type IconName } from './Icon';
+import { PhoneFrame } from './PhoneFrame';
 
 export type ActionOption = { label: string; icon?: IconName; destructive?: boolean; onPress: () => void };
 
@@ -17,32 +18,34 @@ export function ActionSheet({ visible, title, options, onClose }: Props) {
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu">
-        <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-          {!!title && <Text style={styles.title}>{title}</Text>}
-          <View style={styles.group}>
-            {options.map((o, i) => {
-              const color = o.destructive ? colors.deny : colors.ink;
-              return (
-                <Pressable
-                  key={o.label}
-                  onPress={() => {
-                    onClose();
-                    o.onPress();
-                  }}
-                  style={({ pressed }) => [styles.option, i > 0 && styles.divider, pressed && { backgroundColor: colors.bg }]}
-                >
-                  {o.icon && <Icon name={o.icon} size={20} color={color} weight={1.9} />}
-                  <Text style={[styles.label, { color }]}>{o.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Pressable onPress={onClose} style={({ pressed }) => [styles.cancel, pressed && { opacity: 0.7 }]}>
-            <Text style={styles.cancelText}>Cancel</Text>
+      <PhoneFrame transparent>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close menu">
+          <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+            {!!title && <Text style={styles.title}>{title}</Text>}
+            <View style={styles.group}>
+              {options.map((o, i) => {
+                const color = o.destructive ? colors.deny : colors.ink;
+                return (
+                  <Pressable
+                    key={o.label}
+                    onPress={() => {
+                      onClose();
+                      o.onPress();
+                    }}
+                    style={({ pressed }) => [styles.option, i > 0 && styles.divider, pressed && { backgroundColor: colors.bg }]}
+                  >
+                    {o.icon && <Icon name={o.icon} size={20} color={color} weight={1.9} />}
+                    <Text style={[styles.label, { color }]}>{o.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Pressable onPress={onClose} style={({ pressed }) => [styles.cancel, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
-      </Pressable>
+      </PhoneFrame>
     </Modal>
   );
 }

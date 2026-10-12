@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { api, errorMessage } from '../api';
 import { ActionSheet } from '../components/ActionSheet';
 import { Icon } from '../components/Icon';
@@ -7,6 +7,7 @@ import { PostPreview } from '../components/PostPreview';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
 import { useLoader } from '../hooks/useLoader';
+import { showAlert } from '../lib/alert';
 import { REPORT_REASONS, type Decision, type Photo, type ReactionId, type User } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
@@ -63,7 +64,7 @@ export function QueueScreen({ userId }: Props) {
   };
 
   const confirmBlock = (other: User) => {
-    Alert.alert(`Block ${other.name}?`, 'They won’t be able to find you, add you, or send you photos. They aren’t told.', [
+    showAlert(`Block ${other.name}?`, 'They won’t be able to find you, add you, or send you photos. They aren’t told.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Block',

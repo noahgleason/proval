@@ -17,11 +17,11 @@ let currentToken: string | null = null;
 
 /**
  * Asks for permission and stores this device's Expo push token for the user.
- * Quietly does nothing in Expo Go, on simulators, or if permission is denied:
- * push needs a development or store build.
+ * Quietly does nothing on web, in Expo Go, on simulators, or if permission is
+ * denied: push needs a development or store build.
  */
 export async function registerForPush(userId: string): Promise<void> {
-  if (!Device.isDevice || Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return;
+  if (Platform.OS === 'web' || !Device.isDevice || Constants.executionEnvironment === ExecutionEnvironment.StoreClient) return;
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('default', {
