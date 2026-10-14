@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage, usingMock } from '../api';
 import { DesktopBar } from '../components/DesktopBar';
 import { Icon, LogoMark, type IconName } from '../components/Icon';
-import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
+import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
 import { OAUTH_PROVIDERS, signInWithProvider } from '../lib/auth';
 import { AUTO_APPROVE_HOURS } from '../types';
 import { colors, radius, type } from '../theme';
@@ -26,6 +26,8 @@ export default function Welcome() {
   const [error, setError] = useState<string | null>(null);
   const providers = usingMock ? [] : OAUTH_PROVIDERS;
   const desktop = useIsDesktop();
+  // Narrower desktop windows get a smaller headline so "Ask before" stays on one line.
+  const compact = useScreenWidth() < 1000;
 
   const signIn = async (id: (typeof OAUTH_PROVIDERS)[number]['id']) => {
     setBusy(id);
@@ -88,7 +90,7 @@ export default function Welcome() {
         <DesktopBar />
         <ScrollView contentContainerStyle={styles.landing}>
           <View style={styles.pitch}>
-            <Text style={[styles.headline, styles.headlineDesktop]}>Ask before{'\n'}you post.</Text>
+            <Text style={[styles.headline, styles.headlineDesktop, compact && styles.headlineCompact]}>Ask before{'\n'}you post.</Text>
             <Text style={styles.lede}>
               Send a photo to everyone in it before it goes on Instagram. They approve or deny it in a tap.
             </Text>
@@ -134,12 +136,15 @@ export default function Welcome() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg, paddingHorizontal: 24 },
   page: { flex: 1, backgroundColor: colors.bg },
-  landing: { ...desktopPage, flexDirection: 'row', alignItems: 'center', gap: 80, paddingVertical: 72 },
-  pitch: { flex: 1, maxWidth: 600 },
+  landing: { ...desktopPage, flexDirection: 'row', alignItems: 'center', gap: 56, paddingVertical: 72 },
+  pitch: { flex: 1, minWidth: 0, maxWidth: 600 },
   headlineDesktop: { fontSize: 72, lineHeight: 72, letterSpacing: -3.2, marginTop: 0 },
+  headlineCompact: { fontSize: 52, lineHeight: 54, letterSpacing: -2.2 },
   lede: { fontSize: 19, lineHeight: 28, color: colors.muted, marginTop: 20, maxWidth: 520 },
   authCard: {
-    width: 420,
+    flexBasis: 420,
+    flexShrink: 1,
+    minWidth: 320,
     backgroundColor: colors.card,
     borderRadius: radius.lg,
     borderWidth: 1,

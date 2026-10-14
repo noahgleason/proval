@@ -5,7 +5,7 @@ import { ActionSheet } from '../components/ActionSheet';
 import { Avatar } from '../components/Avatar';
 import { isHovered } from '../components/DesktopBar';
 import { Icon, type IconName } from '../components/Icon';
-import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
+import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
@@ -28,9 +28,10 @@ export function QueueScreen({ userId }: Props) {
   const card = useRef<SwipeCardHandle>(null);
   const desktop = useIsDesktop();
   const { height: windowHeight } = useWindowDimensions();
-  // Desktop: the card fits the window height, in the photos' 4:5 shape.
-  const cardHeight = Math.min(620, Math.max(380, windowHeight - 240));
-  const cardWidth = Math.round(cardHeight * 0.8);
+  const pageWidth = useScreenWidth();
+  // Desktop: the card fits the window, in the photos' 4:5 shape, leaving at least 45% of the row for the answer panel.
+  const cardWidth = Math.round(Math.min(Math.min(620, Math.max(380, windowHeight - 240)) * 0.8, (pageWidth - 48) * 0.55));
+  const cardHeight = Math.round(cardWidth / 0.8);
 
   const current = queue[0];
   const next = queue[1];

@@ -341,5 +341,5 @@ const styles = StyleSheet.create({
   error: { color: colors.deny },
   hero: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.lg, backgroundColor: colors.line },
   sheetDesktop: { flexDirection: 'row' },
-  heroDesktop: { width: 420, height: '100%', backgroundColor: colors.line },
+  heroDesktop: { width: '45%', maxWidth: 420, height: '100%', backgroundColor: colors.line },
 });

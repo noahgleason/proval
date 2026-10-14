@@ -181,7 +181,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingBottom: 40, gap: 12 },
   wrapDesktop: { ...desktopPage, paddingTop: 20, paddingBottom: 64, gap: 20 },
-  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: 48 },
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: 40 },
   form: { flex: 1, maxWidth: 520, gap: 12 },
   head: { marginTop: 14, marginBottom: 4, gap: 2 },
   eyebrow: { ...type.label, color: colors.brand },
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  pickerDesktop: { width: 440, height: 550, borderWidth: 1, borderColor: colors.line },
+  pickerDesktop: { width: '45%', maxWidth: 440, height: undefined, aspectRatio: 4 / 5, borderWidth: 1, borderColor: colors.line },
   pickerEmpty: { alignItems: 'center', gap: 6 },
   pickerIcon: {
     width: 60,

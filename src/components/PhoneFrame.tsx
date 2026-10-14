@@ -7,7 +7,7 @@ import { colors } from '../theme';
  * - mobile: the phone app (iOS/Android, phone browsers, narrow windows)
  * - desktop: a website layout for browser windows at least DESKTOP_MIN wide
  */
-export const DESKTOP_MIN = 960;
+export const DESKTOP_MIN = 768;
 /** Desktop pages are centered and no wider than this, gutters included. */
 export const PAGE_MAX = 1200;
 export const PAGE_GUTTER = 40;
