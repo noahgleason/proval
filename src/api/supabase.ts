@@ -3,19 +3,24 @@ import { AUTO_APPROVE_HOURS, friendStateFor, type Friendship, type Photo, type R
 import { rememberUsers } from '../users';
 import type { Api } from './index';
 
+// A review belongs to a tag (photo + tagged person), not to the photo directly,
+// so reviews are fetched through photo_tags.
 const PHOTO_FIELDS =
-  'id, uploader_id, caption, image_path, created_at, photo_tags(user_id), reviews(reviewer_id, decision, reaction, comment, at)';
+  'id, uploader_id, caption, image_path, created_at, photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at))';
 const SIGNED_URL_SECONDS = 60 * 60;
 
+type ReviewRow = { reviewer_id: string; decision: Review['decision']; reaction: ReactionId | null; comment: string | null; at: string };
 type PhotoRow = {
   id: string;
   uploader_id: string;
   caption: string;
   image_path: string;
   created_at: string;
-  photo_tags: { user_id: string }[];
-  reviews: { reviewer_id: string; decision: Review['decision']; reaction: ReactionId | null; comment: string | null; at: string }[];
+  // One review per tag at most; PostgREST returns it as an object or a one-item array depending on version.
+  photo_tags: { user_id: string; reviews: ReviewRow | ReviewRow[] | null }[];
 };
+
+const reviewsOf = (r: PhotoRow): ReviewRow[] => r.photo_tags.flatMap((t) => (t.reviews == null ? [] : ([] as ReviewRow[]).concat(t.reviews)));
 type ProfileRow = { id: string; username: string; name: string; color: string };
 
 const toUser = (p: ProfileRow): User => ({ id: p.id, username: p.username, name: p.name, color: p.color });
@@ -47,7 +52,7 @@ async function toPhotos(rows: PhotoRow[]): Promise<Photo[]> {
     createdAt: r.created_at,
     imageUrl: urlFor.get(r.image_path) ?? '',
     reviews: Object.fromEntries(
-      r.reviews.map((v) => [
+      reviewsOf(r).map((v) => [
         v.reviewer_id,
         { decision: v.decision, reaction: v.reaction ?? undefined, comment: v.comment ?? undefined, at: v.at },
       ]),
@@ -73,7 +78,7 @@ export const supabaseApi: Api = {
       supabaseApi.blocked(userId),
     ]);
     const waiting = (check(rows) as PhotoRow[]).filter(
-      (r) => !r.reviews.some((v) => v.reviewer_id === userId) && !blocked.includes(r.uploader_id),
+      (r) => !reviewsOf(r).some((v) => v.reviewer_id === userId) && !blocked.includes(r.uploader_id),
     );
     return toPhotos(waiting);
   },

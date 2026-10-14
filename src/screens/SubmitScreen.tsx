@@ -7,6 +7,7 @@ import { Icon } from '../components/Icon';
 import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
 import { useLoader } from '../hooks/useLoader';
+import { shrinkPhoto } from '../lib/shrinkPhoto';
 import { colors, radius, type } from '../theme';
 import { AUTO_APPROVE_HOURS } from '../types';
 import { userById } from '../users';
@@ -31,19 +32,16 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
   const friends = friendIds.map(userById);
 
   const pick = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: 'images',
-      quality: 0.5, // keeps uploads well under the function body limit
-      base64: true,
-    });
+    // Full quality here; shrinkPhoto does the one resize and compression.
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 1 });
     if (result.canceled) return;
     const asset = result.assets[0];
-    if (!asset.base64) {
-      setError('Could not read that photo. Try another one.');
-      return;
+    try {
+      setError(null);
+      setPicked(await shrinkPhoto(asset.uri, asset.width, asset.height));
+    } catch (e) {
+      setError(errorMessage(e, 'Could not read that photo. Try another one.'));
     }
-    setError(null);
-    setPicked({ uri: asset.uri, base64: asset.base64, mimeType: asset.mimeType ?? 'image/jpeg' });
   };
 
   const toggle = (id: string) =>
