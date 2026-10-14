@@ -8,10 +8,10 @@ import { Icon, type IconName } from '../components/Icon';
 import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
 import { ReviewSheet } from '../components/ReviewSheet';
-import { SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
+import { requestLine, SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
-import { REPORT_REASONS, timeLeft, type Decision, type Photo, type ReactionId, type User } from '../types';
+import { REPORT_REASONS, timeLeft, type Decision, type Photo, type PhotoRequest, type ReactionId, type User } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
 
@@ -23,6 +23,8 @@ export function QueueScreen({ userId }: Props) {
   const { data: queue, setData: setQueue, loading, error, setError, reload } = useLoader<Photo[]>(fetchQueue, []);
   const [pending, setPending] = useState<Decision | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  /** The whole post around the current photo, once "View whole post" loads it. */
+  const [whole, setWhole] = useState<PhotoRequest | null>(null);
   const [menu, setMenu] = useState<Menu>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const card = useRef<SwipeCardHandle>(null);
@@ -47,6 +49,21 @@ export function QueueScreen({ userId }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [keysOn]);
+
+  const preview = async () => {
+    if (!current) return;
+    if (current.photoCount <= 1) {
+      setWhole(null);
+      setPreviewing(true);
+      return;
+    }
+    try {
+      setWhole(await api.request(userId, current.requestId));
+      setPreviewing(true);
+    } catch (e) {
+      setError(errorMessage(e, 'Could not load the whole post'));
+    }
+  };
 
   const send = async (reaction?: ReactionId, comment?: string) => {
     if (!current || !pending) return;
@@ -115,7 +132,9 @@ export function QueueScreen({ userId }: Props) {
   const head = (
     <>
       <View style={styles.head}>
-        <Text style={styles.eyebrow}>{queue.length === 0 ? 'Inbox zero' : `${queue.length} waiting on you`}</Text>
+        <Text style={styles.eyebrow}>
+          {queue.length === 0 ? 'Inbox zero' : `${queue.length} ${queue.length === 1 ? 'photo' : 'photos'} waiting on you`}
+        </Text>
         <Text style={[styles.h1, desktop && styles.h1Desktop]}>{queue.length === 0 ? 'All caught up' : 'Your call'}</Text>
       </View>
       {!!error && <Text style={styles.error}>{error}</Text>}
@@ -144,7 +163,7 @@ export function QueueScreen({ userId }: Props) {
         ref={card}
         photo={current}
         onSwiped={setPending}
-        onPreview={() => setPreviewing(true)}
+        onPreview={preview}
         onMore={() => setMenu('more')}
         width={desktop ? cardWidth : undefined}
         hideFooter={desktop}
@@ -155,8 +174,17 @@ export function QueueScreen({ userId }: Props) {
   const modals = (
     <>
       <PostPreview
-        post={previewing ? (current ?? null) : null}
+        key={current?.id}
+        post={
+          previewing && current
+            ? whole && whole.id === current.requestId
+              ? whole
+              : { uploaderId: current.uploaderId, kind: current.kind, caption: current.caption, photos: [current] }
+            : null
+        }
         viewerId={userId}
+        startIndex={current && current.photoCount > 1 ? current.position : 0}
+        highlightIndex={current && current.photoCount > 1 ? current.position : undefined}
         onClose={() => setPreviewing(false)}
         onDecide={(d) => {
           setPreviewing(false);
@@ -200,7 +228,7 @@ export function QueueScreen({ userId }: Props) {
               photo={current}
               waiting={queue.length - 1}
               onDecide={(d) => card.current?.swipe(d)}
-              onPreview={() => setPreviewing(true)}
+              onPreview={preview}
               onMore={() => setMenu('more')}
             />
           </View>
@@ -257,7 +285,7 @@ function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore }: PanelPro
       <View style={styles.panelHead}>
         <Avatar userId={uploader.id} size={48} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.panelTitle}>{uploader.name} wants to post this</Text>
+          <Text style={styles.panelTitle}>{requestLine(photo, uploader.name)}</Text>
           <Text style={styles.panelSub}>@{uploader.username}</Text>
         </View>
       </View>
@@ -265,7 +293,14 @@ function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore }: PanelPro
       {!!photo.caption && <Text style={styles.panelCaption}>“{photo.caption}”</Text>}
 
       <View style={styles.facts}>
-        <Fact icon="users" text={others > 0 ? `You and ${others} other${others === 1 ? '' : 's'} are in it` : 'You’re the only one tagged'} />
+        <Fact
+          icon="users"
+          text={
+            others > 0
+              ? `You and ${others} other${others === 1 ? '' : 's'} are in this photo`
+              : `You’re the only one tagged in this photo`
+          }
+        />
         <Fact icon="clock" text={`Counts as a yes in ${timeLeft(photo)} if you don’t answer`} />
       </View>
 
@@ -285,7 +320,11 @@ function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore }: PanelPro
       <Text style={styles.tip}>Tip: press ← or →, or drag the photo.</Text>
 
       <View style={styles.panelLinks}>
-        <PanelLink icon="eye" label="Preview as a post" onPress={onPreview} />
+        {photo.photoCount > 1 ? (
+          <PanelLink icon="cards" label={`View whole post (${photo.photoCount} photos)`} onPress={onPreview} />
+        ) : (
+          <PanelLink icon="eye" label="Preview as a post" onPress={onPreview} />
+        )}
         <PanelLink icon="alert" label="Report or block" onPress={onMore} destructive />
       </View>
       {waiting > 0 && <Text style={styles.panelSub}>{waiting} more waiting after this one</Text>}

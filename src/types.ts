@@ -79,9 +79,22 @@ export type Review = {
 
 export type PhotoStatus = 'pending' | 'approved' | 'denied';
 
+/** A story request is one photo; a post request is an Instagram-style carousel of up to MAX_POST_PHOTOS. */
+export type RequestKind = 'story' | 'post';
+/** Instagram's carousel limit. Mirrors create_request() in SQL. */
+export const MAX_POST_PHOTOS = 20;
+
+/** One photo inside a request. Everyone tagged in it answers it on its own. */
 export type Photo = {
   id: string;
+  requestId: string;
+  kind: RequestKind;
+  /** 0-based place in the post. */
+  position: number;
+  /** How many photos the whole request has. */
+  photoCount: number;
   uploaderId: string;
+  /** The request's caption. */
   caption: string;
   taggedIds: string[];
   createdAt: string; // ISO date
@@ -90,6 +103,32 @@ export type Photo = {
   /** Where the app loads the image from. */
   imageUrl: string;
 };
+
+/** A story or post someone wants to share: its photos share one caption and one deadline. */
+export type PhotoRequest = {
+  id: string;
+  kind: RequestKind;
+  uploaderId: string;
+  caption: string;
+  createdAt: string; // ISO date
+  /** In post order. */
+  photos: Photo[];
+};
+
+/** Groups photos into their requests, keeping the order requests first appear in. */
+export function groupRequests(photos: Photo[]): PhotoRequest[] {
+  const byId = new Map<string, PhotoRequest>();
+  for (const p of photos) {
+    let r = byId.get(p.requestId);
+    if (!r) {
+      r = { id: p.requestId, kind: p.kind, uploaderId: p.uploaderId, caption: p.caption, createdAt: p.createdAt, photos: [] };
+      byId.set(p.requestId, r);
+    }
+    r.photos.push(p);
+  }
+  for (const r of byId.values()) r.photos.sort((a, b) => a.position - b.position);
+  return [...byId.values()];
+}
 
 /** Silence counts as a yes once this window passes. Mirrors answer_window() in SQL. */
 export const AUTO_APPROVE_HOURS = 24;
@@ -112,12 +151,28 @@ export function answerOf(photo: Pick<Photo, 'createdAt' | 'reviews'>, userId: st
   return isExpired(photo, now) ? 'auto' : 'waiting';
 }
 
-/** Everyone tagged has to approve (or stay silent until the deadline); one deny blocks the post. */
+/**
+ * Cleared once everyone tagged approves (or stays silent until the deadline). A "no" marks the
+ * photo; it isn't removed, and the sender decides what to do. A photo nobody is tagged in is cleared.
+ */
 export function statusOf(photo: Pick<Photo, 'taggedIds' | 'reviews' | 'createdAt'>, now = Date.now()): PhotoStatus {
   const answers = photo.taggedIds.map((id) => answerOf(photo, id, now));
   if (answers.includes('deny')) return 'denied';
   if (answers.includes('waiting')) return 'pending';
   return 'approved';
+}
+
+/** A request is waiting while any photo is; otherwise it's marked if any photo got a no. */
+export function requestStatusOf(request: PhotoRequest, now = Date.now()): PhotoStatus {
+  const statuses = request.photos.map((p) => statusOf(p, now));
+  if (statuses.includes('pending')) return 'pending';
+  if (statuses.includes('denied')) return 'denied';
+  return 'approved';
+}
+
+/** Everyone tagged anywhere in the request. */
+export function taggedInRequest(request: PhotoRequest): string[] {
+  return [...new Set(request.photos.flatMap((p) => p.taggedIds))];
 }
 
 /** "5h", "40m", "2d": compact time until the deadline. */

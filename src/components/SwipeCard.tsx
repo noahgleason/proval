@@ -96,6 +96,7 @@ export function SwipeCard({ photo, onSwiped, onPreview, onMore, width: cardWidth
 
   const uploader = userById(photo.uploaderId);
   const others = photo.taggedIds.length - 1;
+  const inPost = photo.photoCount > 1;
 
   return (
     <GestureDetector gesture={pan}>
@@ -121,7 +122,7 @@ export function SwipeCard({ photo, onSwiped, onPreview, onMore, width: cardWidth
           <View style={styles.footer}>
             <Avatar userId={uploader.id} size={36} ring="#fff" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.from}>{uploader.name} wants to post</Text>
+              <Text style={styles.from}>{requestLine(photo, uploader.name)}</Text>
               {!!photo.caption && (
                 <Text style={styles.caption} numberOfLines={2}>
                   “{photo.caption}”
@@ -131,14 +132,27 @@ export function SwipeCard({ photo, onSwiped, onPreview, onMore, width: cardWidth
                 {others > 0 ? `You + ${others} other${others === 1 ? '' : 's'} · ` : ''}auto-approves in {timeLeft(photo)}
               </Text>
             </View>
-            <Pressable onPress={onPreview} style={styles.preview} accessibilityLabel="Preview the post" hitSlop={8}>
-              <Icon name="eye" size={18} color={colors.ink} weight={2} />
-            </Pressable>
+            {inPost ? (
+              <Pressable onPress={onPreview} style={styles.wholePost} accessibilityLabel="View whole post" hitSlop={8}>
+                <Icon name="cards" size={16} color={colors.ink} weight={2} />
+                <Text style={styles.wholePostText}>All {photo.photoCount}</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={onPreview} style={styles.preview} accessibilityLabel="Preview the post" hitSlop={8}>
+                <Icon name="eye" size={18} color={colors.ink} weight={2} />
+              </Pressable>
+            )}
           </View>
         )}
       </Animated.View>
     </GestureDetector>
   );
+}
+
+/** "Marcus wants to post", "Marcus's post · photo 2 of 4", "Marcus's story". */
+export function requestLine(photo: Pick<Photo, 'kind' | 'position' | 'photoCount'>, name: string): string {
+  if (photo.photoCount > 1) return `${name}’s post · photo ${photo.position + 1} of ${photo.photoCount}`;
+  return photo.kind === 'story' ? `${name} wants to add this to their story` : `${name} wants to post`;
 }
 
 const styles = StyleSheet.create({
@@ -191,6 +205,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  wholePost: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+  },
+  wholePostText: { color: colors.ink, fontWeight: '700', fontSize: 14 },
   badge: {
     position: 'absolute',
     top: 20,

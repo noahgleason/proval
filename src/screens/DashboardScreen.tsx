@@ -6,10 +6,22 @@ import { Avatar } from '../components/Avatar';
 import { Icon, REACTION_ICON, type IconName } from '../components/Icon';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
-import { answerOf, reactionFor, statusOf, timeLeft, type Answer, type Photo, type PhotoStatus } from '../types';
+import {
+  answerOf,
+  reactionFor,
+  requestStatusOf,
+  statusOf,
+  taggedInRequest,
+  timeLeft,
+  type Answer,
+  type Photo,
+  type PhotoRequest,
+  type PhotoStatus,
+} from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
 import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
+import { PostPreview } from '../components/PostPreview';
 
 type Props = { userId: string };
 type Layout = 'grid' | 'list';
@@ -17,7 +29,8 @@ type Layout = 'grid' | 'list';
 const STATUS: Record<PhotoStatus, { label: string; short: string; icon: IconName; fg: string; bg: string }> = {
   approved: { label: 'Cleared to post', short: 'Cleared', icon: 'check', fg: colors.approve, bg: colors.approveSoft },
   pending: { label: 'Waiting', short: 'Waiting', icon: 'clock', fg: colors.pending, bg: colors.pendingSoft },
-  denied: { label: 'Don’t post', short: 'Blocked', icon: 'x', fg: colors.deny, bg: colors.denySoft },
+  // A no marks the photo; nothing is removed, and the sender decides.
+  denied: { label: 'Got a no', short: 'Marked no', icon: 'x', fg: colors.deny, bg: colors.denySoft },
 };
 const ORDER: PhotoStatus[] = ['approved', 'pending', 'denied'];
 
@@ -34,39 +47,52 @@ const DESKTOP_GAP = 16;
 /** Desktop grid tiles are about this wide. */
 const DESKTOP_TILE = 210;
 
-/** Everything you've asked about: what's cleared, what's waiting, what got blocked. */
+/** Everything you've asked about: what's cleared, what's waiting, what got a no. */
 export function DashboardScreen({ userId }: Props) {
   const fetchPosts = useCallback(() => api.myPosts(userId), [userId]);
-  const { data: posts, setData: setPosts, loading, error, reload } = useLoader<Photo[]>(fetchPosts, []);
+  const { data: requests, setData: setRequests, loading, error, reload } = useLoader<PhotoRequest[]>(fetchPosts, []);
   const [filter, setFilter] = useState<PhotoStatus | null>(null);
   const [view, setView] = useState<Layout>('grid');
-  const [open, setOpen] = useState<Photo | null>(null);
+  const [open, setOpen] = useState<PhotoRequest | null>(null);
+  /** Which photo of the open request the desktop dialog shows large. */
+  const [focus, setFocus] = useState(0);
+  const [previewAt, setPreviewAt] = useState<number | null>(null);
   const width = useScreenWidth();
   const desktop = useIsDesktop();
   const gap = desktop ? DESKTOP_GAP : GAP;
   const columns = view === 'list' ? (desktop ? 2 : 1) : desktop ? Math.max(3, Math.floor((width + gap) / (DESKTOP_TILE + gap))) : 3;
   const tile = desktop ? (width - gap * (columns - 1)) / columns : (width - GUTTER * 2 - GAP * 2) / 3;
 
-  const withdraw = (photo: Photo) => {
-    showAlert('Withdraw this request?', 'The photo is deleted from Proval and your friends stop seeing it.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Withdraw',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await api.deletePhoto(userId, photo.id);
-            setOpen(null);
-            setPosts((ps) => ps.filter((p) => p.id !== photo.id));
-          } catch (e) {
-            showAlert('Couldn’t withdraw it', errorMessage(e));
-          }
-        },
-      },
-    ]);
+  const openRequest = (r: PhotoRequest) => {
+    setFocus(0);
+    setOpen(r);
   };
 
-  const withStatus = useMemo(() => posts.map((p) => ({ photo: p, status: statusOf(p) })), [posts]);
+  const withdraw = (request: PhotoRequest) => {
+    const many = request.photos.length > 1;
+    showAlert(
+      'Withdraw this request?',
+      `${many ? 'All its photos are' : 'The photo is'} deleted from Proval and your friends stop seeing ${many ? 'them' : 'it'}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Withdraw',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteRequest(userId, request.id);
+              setOpen(null);
+              setRequests((rs) => rs.filter((r) => r.id !== request.id));
+            } catch (e) {
+              showAlert('Couldn’t withdraw it', errorMessage(e));
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const withStatus = useMemo(() => requests.map((r) => ({ request: r, status: requestStatusOf(r) })), [requests]);
   const counts = useMemo(() => {
     const c: Record<PhotoStatus, number> = { approved: 0, pending: 0, denied: 0 };
     withStatus.forEach((x) => c[x.status]++);
@@ -78,7 +104,7 @@ export function DashboardScreen({ userId }: Props) {
     <View style={[styles.headerWrap, desktop && styles.headerWrapDesktop]}>
       <View style={styles.headRow}>
         <View style={styles.head}>
-          <Text style={styles.eyebrow}>{posts.length} sent</Text>
+          <Text style={styles.eyebrow}>{requests.length} sent</Text>
           <Text style={[styles.h1, desktop && styles.h1Desktop]}>Dashboard</Text>
         </View>
         <View style={styles.toggle}>
@@ -128,12 +154,15 @@ export function DashboardScreen({ userId }: Props) {
     </View>
   );
 
+  const single = open?.photos.length === 1;
+  const focused = open?.photos[Math.min(focus, (open?.photos.length ?? 1) - 1)];
+
   return (
     <>
       <FlatList
         key={`${view}-${columns}`}
         data={shown}
-        keyExtractor={(x) => x.photo.id}
+        keyExtractor={(x) => x.request.id}
         numColumns={columns}
         columnWrapperStyle={columns > 1 ? { gap: view === 'grid' ? gap : 16 } : undefined}
         contentContainerStyle={[
@@ -146,33 +175,72 @@ export function DashboardScreen({ userId }: Props) {
         ListEmptyComponent={empty}
         renderItem={({ item }) =>
           view === 'grid' ? (
-            <Pressable onPress={() => setOpen(item.photo)} style={{ width: tile }}>
-              <Image source={{ uri: item.photo.imageUrl }} style={[styles.tile, { height: tile * 1.25 }]} />
-              <StatusChip photo={item.photo} status={item.status} />
+            <Pressable onPress={() => openRequest(item.request)} style={{ width: tile }}>
+              <Image source={{ uri: item.request.photos[0].imageUrl }} style={[styles.tile, { height: tile * 1.25 }]} />
+              {item.request.photos.length > 1 && <CountBadge n={item.request.photos.length} />}
+              <StatusChip request={item.request} status={item.status} />
             </Pressable>
           ) : (
-            <Pressable onPress={desktop ? () => setOpen(item.photo) : undefined} style={[styles.card, desktop && { flex: 1 }]}>
-              <PostDetails photo={item.photo} status={item.status} />
+            <Pressable onPress={() => openRequest(item.request)} style={[styles.card, desktop && { flex: 1 }]}>
+              <RequestSummary request={item.request} status={item.status} />
+              {item.request.photos.length === 1 ? (
+                <PhotoAnswers photo={item.request.photos[0]} />
+              ) : (
+                <PhotoStrip request={item.request} />
+              )}
             </Pressable>
           )
         }
       />
 
       <AppModal visible={!!open} onClose={() => setOpen(null)} kind="page" width={900}>
-        {open && (
+        {open && focused && (
           <View style={[{ flex: 1 }, desktop && styles.sheetDesktop]}>
-            {desktop && <Image source={{ uri: open.imageUrl }} style={styles.heroDesktop} />}
+            {desktop && (
+              <Pressable onPress={() => setPreviewAt(focus)} style={styles.heroDesktop} accessibilityLabel="Preview the post">
+                <Image source={{ uri: focused.imageUrl }} style={styles.heroImage} />
+                {!single && <CountBadge n={open.photos.length} label={`${focus + 1}/${open.photos.length}`} />}
+              </Pressable>
+            )}
             <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.sheet}>
               <View style={styles.sheetTop}>
-                <Text style={styles.sheetTitle}>Request</Text>
+                <Text style={styles.sheetTitle}>{open.kind === 'story' ? 'Story request' : 'Post request'}</Text>
                 <Pressable onPress={() => setOpen(null)} style={styles.close} accessibilityLabel="Close">
                   <Icon name="x" size={18} color={colors.ink} weight={2.2} />
                 </Pressable>
               </View>
-              {!desktop && <Image source={{ uri: open.imageUrl }} style={styles.hero} />}
+              {!desktop && single && (
+                <Pressable onPress={() => setPreviewAt(0)}>
+                  <Image source={{ uri: focused.imageUrl }} style={styles.hero} />
+                </Pressable>
+              )}
               <View style={styles.card}>
-                <PostDetails photo={open} status={statusOf(open)} hideThumb />
+                <RequestSummary request={open} status={requestStatusOf(open)} hideThumb />
+                {single && <PhotoAnswers photo={open.photos[0]} />}
               </View>
+
+              {!single &&
+                open.photos.map((p, i) => (
+                  <Pressable
+                    key={p.id}
+                    onPress={() => (desktop ? setFocus(i) : setPreviewAt(i))}
+                    style={[styles.card, desktop && i === focus && styles.cardFocused]}
+                  >
+                    <View style={styles.top}>
+                      <Image source={{ uri: p.imageUrl }} style={styles.thumb} />
+                      <View style={{ flex: 1, gap: 6 }}>
+                        <Text style={styles.caption}>Photo {i + 1}</Text>
+                        <StatusBadge photo={p} />
+                      </View>
+                    </View>
+                    {p.taggedIds.length ? <PhotoAnswers photo={p} /> : <Text style={styles.muted}>Nobody tagged in this one.</Text>}
+                  </Pressable>
+                ))}
+
+              <Pressable onPress={() => setPreviewAt(desktop ? focus : 0)} style={styles.secondary}>
+                <Icon name="eye" size={18} color={colors.ink} weight={2} />
+                <Text style={styles.secondaryText}>{single ? 'Preview post' : 'Preview whole post'}</Text>
+              </Pressable>
               <Pressable onPress={() => withdraw(open)} style={styles.withdraw}>
                 <Icon name="trash" size={18} color={colors.deny} weight={2} />
                 <Text style={styles.withdrawText}>Withdraw request</Text>
@@ -180,42 +248,109 @@ export function DashboardScreen({ userId }: Props) {
             </ScrollView>
           </View>
         )}
+        <PostPreview
+          key={`${open?.id}-${previewAt}`}
+          post={open && previewAt !== null ? open : null}
+          viewerId={userId}
+          startIndex={previewAt ?? 0}
+          onClose={() => setPreviewAt(null)}
+        />
       </AppModal>
     </>
   );
 }
 
-/** Small corner badge on grid tiles. Waiting photos show the countdown instead of a glyph. */
-function StatusChip({ photo, status }: { photo: Photo; status: PhotoStatus }) {
-  const s = STATUS[status];
+/** "4" with a stack icon, top-right on a post's tile. */
+function CountBadge({ n, label }: { n: number; label?: string }) {
   return (
-    <View style={[styles.chip, { backgroundColor: s.fg }]}>
-      <Icon name={s.icon} size={11} color="#fff" weight={3} />
-      {status === 'pending' && <Text style={styles.chipText}>{timeLeft(photo)}</Text>}
+    <View style={styles.count} accessibilityLabel={`${n} photos`}>
+      <Icon name="cards" size={12} color="#fff" weight={2.4} />
+      <Text style={styles.countText}>{label ?? n}</Text>
     </View>
   );
 }
 
-function PostDetails({ photo, status, hideThumb }: { photo: Photo; status: PhotoStatus; hideThumb?: boolean }) {
+/** Small corner badge on grid tiles. Waiting requests show the countdown instead of a glyph. */
+function StatusChip({ request, status }: { request: PhotoRequest; status: PhotoStatus }) {
   const s = STATUS[status];
   return (
-    <>
-      <View style={styles.top}>
-        {!hideThumb && <Image source={{ uri: photo.imageUrl }} style={styles.thumb} />}
-        <View style={{ flex: 1, gap: 6 }}>
-          <Text style={styles.caption} numberOfLines={1}>
-            {photo.caption || 'Untitled'}
-          </Text>
-          <View style={styles.badgeRow}>
-            <View style={[styles.badge, { backgroundColor: s.bg }]}>
-              <Icon name={s.icon} size={13} color={s.fg} weight={2.6} />
-              <Text style={[styles.badgeText, { color: s.fg }]}>{s.label}</Text>
-            </View>
-            {status === 'pending' && <Text style={styles.deadline}>auto-approves in {timeLeft(photo)}</Text>}
-          </View>
-        </View>
-      </View>
+    <View style={[styles.chip, { backgroundColor: s.fg }]}>
+      <Icon name={s.icon} size={11} color="#fff" weight={3} />
+      {status === 'pending' && <Text style={styles.chipText}>{timeLeft(request)}</Text>}
+    </View>
+  );
+}
 
+function StatusBadge({ photo }: { photo: Photo }) {
+  const status = statusOf(photo);
+  const s = STATUS[status];
+  return (
+    <View style={styles.badgeRow}>
+      <View style={[styles.badge, { backgroundColor: s.bg }]}>
+        <Icon name={s.icon} size={13} color={s.fg} weight={2.6} />
+        <Text style={[styles.badgeText, { color: s.fg }]}>{s.label}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Caption, overall status and, for posts, how the photos are doing. */
+function RequestSummary({ request, status, hideThumb }: { request: PhotoRequest; status: PhotoStatus; hideThumb?: boolean }) {
+  const s = STATUS[status];
+  const many = request.photos.length > 1;
+  const per = request.photos.map((p) => statusOf(p));
+  const parts = [
+    per.filter((x) => x === 'approved').length && `${per.filter((x) => x === 'approved').length} cleared`,
+    per.filter((x) => x === 'pending').length && `${per.filter((x) => x === 'pending').length} waiting`,
+    per.filter((x) => x === 'denied').length && `${per.filter((x) => x === 'denied').length} marked no`,
+  ].filter(Boolean);
+  const people = taggedInRequest(request).length;
+  return (
+    <View style={styles.top}>
+      {!hideThumb && <Image source={{ uri: request.photos[0].imageUrl }} style={styles.thumb} />}
+      <View style={{ flex: 1, gap: 6 }}>
+        <Text style={styles.caption} numberOfLines={1}>
+          {request.caption || 'Untitled'}
+        </Text>
+        <View style={styles.badgeRow}>
+          <View style={[styles.badge, { backgroundColor: s.bg }]}>
+            <Icon name={s.icon} size={13} color={s.fg} weight={2.6} />
+            <Text style={[styles.badgeText, { color: s.fg }]}>{s.label}</Text>
+          </View>
+          {status === 'pending' && <Text style={styles.deadline}>auto-approves in {timeLeft(request)}</Text>}
+        </View>
+        <Text style={styles.deadline}>
+          {request.kind === 'story' ? 'Story' : 'Post'}
+          {many ? ` · ${request.photos.length} photos · ${parts.join(', ')}` : ''} · {people} {people === 1 ? 'person' : 'people'} asked
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/** List view, posts: a row of small photos with each one's status. */
+function PhotoStrip({ request }: { request: PhotoRequest }) {
+  return (
+    <View style={styles.strip}>
+      {request.photos.map((p) => {
+        const s = STATUS[statusOf(p)];
+        return (
+          <View key={p.id}>
+            <Image source={{ uri: p.imageUrl }} style={styles.stripThumb} />
+            <View style={[styles.chip, styles.stripChip, { backgroundColor: s.fg }]}>
+              <Icon name={s.icon} size={10} color="#fff" weight={3} />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+/** Each tagged person's answer to one photo, with their reaction and note. */
+function PhotoAnswers({ photo }: { photo: Photo }) {
+  return (
+    <>
       {photo.taggedIds.map((id) => {
         const r = photo.reviews[id];
         const a = ANSWER[answerOf(photo, id)];
@@ -342,4 +477,35 @@ const styles = StyleSheet.create({
   hero: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.lg, backgroundColor: colors.line },
   sheetDesktop: { flexDirection: 'row' },
   heroDesktop: { width: '45%', maxWidth: 420, height: '100%', backgroundColor: colors.line },
+  heroImage: { width: '100%', height: '100%' },
+  cardFocused: { borderWidth: 2, borderColor: colors.brand, padding: 12 },
+  muted: { color: colors.muted },
+  count: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 22,
+    paddingHorizontal: 7,
+    borderRadius: 11,
+    backgroundColor: colors.scrim,
+  },
+  countText: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  strip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  stripThumb: { width: 48, height: 60, borderRadius: 8, backgroundColor: colors.line },
+  stripChip: { left: 3, bottom: 3, minWidth: 16, height: 16, paddingHorizontal: 3 },
+  secondary: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+  },
+  secondaryText: { color: colors.ink, fontWeight: '700', fontSize: 16 },
 });

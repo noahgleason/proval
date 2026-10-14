@@ -43,6 +43,8 @@ const ICONS = {
   check: <Path d="M5 12.5 9.5 17 19 7.5" />,
   x: <Path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
   plus: <Path d="M12 5v14M5 12h14" />,
+  chevronLeft: <Path d="M14.5 6 8.5 12l6 6" />,
+  chevronRight: <Path d="M9.5 6l6 6-6 6" />,
   image: (
     <>
       <Rect x={3} y={4} width={18} height={16} rx={2.5} />

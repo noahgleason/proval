@@ -1,21 +1,33 @@
 import { sb } from '../lib/supabase';
-import { AUTO_APPROVE_HOURS, friendStateFor, type Friendship, type Photo, type ReactionId, type Review, type User } from '../types';
+import {
+  AUTO_APPROVE_HOURS,
+  friendStateFor,
+  groupRequests,
+  type Friendship,
+  type Photo,
+  type ReactionId,
+  type RequestKind,
+  type Review,
+  type User,
+} from '../types';
 import { rememberUsers } from '../users';
 import type { Api } from './index';
 
 // A review belongs to a tag (photo + tagged person), not to the photo directly,
-// so reviews are fetched through photo_tags.
+// so reviews are fetched through photo_tags. The request supplies kind, caption and deadline.
 const PHOTO_FIELDS =
-  'id, uploader_id, caption, image_path, created_at, photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at))';
+  'id, request_id, position, uploader_id, image_path, created_at, photo_requests(kind, caption, photo_count), photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at))';
 const SIGNED_URL_SECONDS = 60 * 60;
 
 type ReviewRow = { reviewer_id: string; decision: Review['decision']; reaction: ReactionId | null; comment: string | null; at: string };
 type PhotoRow = {
   id: string;
+  request_id: string;
+  position: number;
   uploader_id: string;
-  caption: string;
   image_path: string;
   created_at: string;
+  photo_requests: { kind: RequestKind; caption: string; photo_count: number };
   // One review per tag at most; PostgREST returns it as an object or a one-item array depending on version.
   photo_tags: { user_id: string; reviews: ReviewRow | ReviewRow[] | null }[];
 };
@@ -46,8 +58,12 @@ async function toPhotos(rows: PhotoRow[]): Promise<Photo[]> {
   const urlFor = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
   return rows.map((r) => ({
     id: r.id,
+    requestId: r.request_id,
+    kind: r.photo_requests.kind,
+    position: r.position,
+    photoCount: r.photo_requests.photo_count,
     uploaderId: r.uploader_id,
-    caption: r.caption,
+    caption: r.photo_requests.caption,
     taggedIds: r.photo_tags.map((t) => t.user_id),
     createdAt: r.created_at,
     imageUrl: urlFor.get(r.image_path) ?? '',
@@ -73,31 +89,58 @@ export const supabaseApi: Api = {
   async queue(userId) {
     const since = new Date(Date.now() - AUTO_APPROVE_HOURS * 3_600_000).toISOString();
     const [rows, blocked] = await Promise.all([
-      // RLS only returns photos you sent or are tagged in, so "not mine" means "tagged in".
-      sb().from('photos').select(PHOTO_FIELDS).neq('uploader_id', userId).gt('created_at', since).order('created_at'),
+      // RLS returns whole requests you sent or are tagged in, so keep only the photos you're in.
+      sb()
+        .from('photos')
+        .select(PHOTO_FIELDS)
+        .neq('uploader_id', userId)
+        .gt('created_at', since)
+        .order('created_at')
+        .order('position'),
       supabaseApi.blocked(userId),
     ]);
-    const waiting = (check(rows) as PhotoRow[]).filter(
-      (r) => !reviewsOf(r).some((v) => v.reviewer_id === userId) && !blocked.includes(r.uploader_id),
+    const waiting = (check(rows) as unknown as PhotoRow[]).filter(
+      (r) =>
+        r.photo_tags.some((t) => t.user_id === userId) &&
+        !reviewsOf(r).some((v) => v.reviewer_id === userId) &&
+        !blocked.includes(r.uploader_id),
     );
     return toPhotos(waiting);
   },
 
   async myPosts(userId) {
     const rows = check(
-      await sb().from('photos').select(PHOTO_FIELDS).eq('uploader_id', userId).order('created_at', { ascending: false }),
-    ) as PhotoRow[];
-    return toPhotos(rows);
+      await sb()
+        .from('photos')
+        .select(PHOTO_FIELDS)
+        .eq('uploader_id', userId)
+        .order('created_at', { ascending: false })
+        .order('position'),
+    ) as unknown as PhotoRow[];
+    return groupRequests(await toPhotos(rows));
+  },
+
+  async request(_userId, requestId) {
+    const rows = check(await sb().from('photos').select(PHOTO_FIELDS).eq('request_id', requestId).order('position')) as unknown as PhotoRow[];
+    const [request] = groupRequests(await toPhotos(rows));
+    if (!request) throw new Error('That request is gone');
+    return request;
   },
 
   async submit(input) {
-    const path = `${input.uploaderId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${EXT[input.mimeType] ?? 'jpg'}`;
     const bucket = sb().storage.from('photos');
-    check(await bucket.upload(path, decodeBase64(input.imageBase64), { contentType: input.mimeType }));
-    const res = await sb().rpc('create_photo', { caption: input.caption, image_path: path, tagged: input.taggedIds });
-    if (res.error) {
-      await bucket.remove([path]);
-      throw new Error(res.error.message);
+    const paths: string[] = [];
+    try {
+      for (const photo of input.photos) {
+        const path = `${input.uploaderId}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${EXT[photo.mimeType] ?? 'jpg'}`;
+        check(await bucket.upload(path, decodeBase64(photo.imageBase64), { contentType: photo.mimeType }));
+        paths.push(path);
+      }
+      const items = input.photos.map((p, i) => ({ image_path: paths[i], tagged: p.taggedIds }));
+      check(await sb().rpc('create_request', { kind: input.kind, caption: input.caption, items }));
+    } catch (e) {
+      if (paths.length) await bucket.remove(paths);
+      throw e;
     }
   },
 
@@ -105,12 +148,12 @@ export const supabaseApi: Api = {
     check(await sb().rpc('review_photo', { photo: photoId, decision, reaction: reaction ?? null, comment: comment ?? null }));
   },
 
-  async deletePhoto(userId, photoId) {
-    const row = check(await sb().from('photos').select('image_path').eq('id', photoId).eq('uploader_id', userId).single()) as {
-      image_path: string;
-    };
-    check(await sb().from('photos').delete().eq('id', photoId));
-    await sb().storage.from('photos').remove([row.image_path]);
+  async deleteRequest(userId, requestId) {
+    const rows = check(
+      await sb().from('photos').select('image_path').eq('request_id', requestId).eq('uploader_id', userId),
+    ) as { image_path: string }[];
+    check(await sb().from('photo_requests').delete().eq('id', requestId));
+    if (rows.length) await sb().storage.from('photos').remove(rows.map((r) => r.image_path));
   },
 
   async friends(userId) {

@@ -1,4 +1,4 @@
-import type { Decision, FriendState, Photo, ReactionId, User } from '../types';
+import type { Decision, FriendState, Photo, PhotoRequest, ReactionId, RequestKind, User } from '../types';
 import { mockApi } from './mock';
 import { supabaseApi } from './supabase';
 
@@ -9,13 +9,20 @@ import { supabaseApi } from './supabase';
 export const usingMock = !process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
 export type NewPhoto = {
-  uploaderId: string;
-  caption: string;
+  /** Who's in this photo. A post can have photos with nobody tagged, as long as someone is tagged somewhere. */
   taggedIds: string[];
   imageBase64: string;
   mimeType: string;
   /** Local file uri, used by the demo to show the picked photo. */
   localUri: string;
+};
+
+export type NewRequest = {
+  uploaderId: string;
+  kind: RequestKind;
+  caption: string;
+  /** In post order. A story has exactly one. */
+  photos: NewPhoto[];
 };
 
 export type ReviewInput = {
@@ -38,14 +45,19 @@ export type ReportInput = {
  * user; Supabase ignores it and trusts the session instead.
  */
 export interface Api {
-  /** Photos you're tagged in, haven't answered, still inside the window. Oldest first. */
+  /**
+   * Photos you're tagged in, haven't answered, still inside the window: only your photos,
+   * never the rest of the post. Oldest request first, in post order.
+   */
   queue(userId: string): Promise<Photo[]>;
-  /** Photos you sent, newest first. */
-  myPosts(userId: string): Promise<Photo[]>;
-  submit(input: NewPhoto): Promise<void>;
+  /** Requests you sent, newest first. */
+  myPosts(userId: string): Promise<PhotoRequest[]>;
+  /** A whole request, for "View whole post". You must have sent it or be tagged in it. */
+  request(userId: string, requestId: string): Promise<PhotoRequest>;
+  submit(input: NewRequest): Promise<void>;
   review(input: ReviewInput): Promise<void>;
-  /** Withdraw a photo you sent. */
-  deletePhoto(userId: string, photoId: string): Promise<void>;
+  /** Withdraw a request you sent, with all its photos. */
+  deleteRequest(userId: string, requestId: string): Promise<void>;
 
   friends(userId: string): Promise<FriendState>;
   /** Sends a friend request, or accepts theirs if they already asked you. */

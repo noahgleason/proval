@@ -1,4 +1,15 @@
-import { friendStateFor, isExpired, pairKey, type Friendship, type Photo, type Review, type User } from '../types';
+import {
+  friendStateFor,
+  groupRequests,
+  isExpired,
+  MAX_POST_PHOTOS,
+  pairKey,
+  type Friendship,
+  type Photo,
+  type RequestKind,
+  type Review,
+  type User,
+} from '../types';
 import { rememberUsers } from '../users';
 import type { Api } from './index';
 
@@ -18,78 +29,68 @@ const hoursAgo = (n: number) => new Date(Date.now() - n * 3_600_000).toISOString
 const now = () => new Date().toISOString();
 const wait = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
+const img = (seed: string) => `https://picsum.photos/seed/proval-${seed}/800/1000`;
+
+type DemoPhoto = { seed: string; tagged: string[]; reviews?: Record<string, Review> };
+
+/** Builds one request's photos. A single photo is a story request; more make a post. */
+function demoRequest(id: string, uploaderId: string, caption: string, createdAt: string, shots: DemoPhoto[], kind?: RequestKind): Photo[] {
+  return shots.map((s, i) => ({
+    id: `${id}-${i}`,
+    requestId: id,
+    kind: kind ?? (shots.length > 1 ? 'post' : 'story'),
+    position: i,
+    photoCount: shots.length,
+    uploaderId,
+    caption,
+    taggedIds: s.tagged,
+    createdAt,
+    reviews: s.reviews ?? {},
+    imageUrl: img(s.seed),
+  }));
+}
+
 let photos: Photo[] = [
-  {
-    id: 'm1',
-    uploaderId: 'marcus',
-    caption: 'beach day',
-    taggedIds: ['ava', 'jordan'],
-    createdAt: hoursAgo(2),
-    reviews: { jordan: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(1) } },
-    imageUrl: 'https://picsum.photos/seed/proval-beach/800/1000',
-  },
-  {
-    id: 'm2',
-    uploaderId: 'jordan',
-    caption: 'birthday dinner!!',
-    taggedIds: ['ava', 'marcus', 'priya'],
-    createdAt: hoursAgo(9),
-    reviews: {},
-    imageUrl: 'https://picsum.photos/seed/proval-dinner/800/1000',
-  },
-  {
-    id: 'm3',
-    uploaderId: 'priya',
-    caption: 'concert pics',
-    taggedIds: ['ava'],
-    createdAt: hoursAgo(19),
-    reviews: {},
-    imageUrl: 'https://picsum.photos/seed/proval-concert/800/1000',
-  },
-  {
-    id: 'm4',
-    uploaderId: 'ava',
-    caption: 'formal',
-    taggedIds: ['marcus', 'priya'],
-    createdAt: hoursAgo(30),
-    reviews: {
-      marcus: { decision: 'approve', at: hoursAgo(28) },
-      priya: { decision: 'deny', reaction: 'better_one', comment: 'use the one where im not blinking lol', at: hoursAgo(26) },
+  // Marcus's beach post: Ava is in photos 1 and 3, so she reviews those two.
+  ...demoRequest('r1', 'marcus', 'beach day', hoursAgo(2), [
+    { seed: 'beach', tagged: ['ava', 'jordan'], reviews: { jordan: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(1) } } },
+    { seed: 'beach-2', tagged: ['jordan'] },
+    { seed: 'beach-3', tagged: ['ava'] },
+  ]),
+  ...demoRequest('r2', 'jordan', 'birthday dinner!!', hoursAgo(9), [{ seed: 'dinner', tagged: ['ava', 'marcus', 'priya'] }]),
+  ...demoRequest('r3', 'priya', 'concert pics', hoursAgo(19), [{ seed: 'concert', tagged: ['ava'] }]),
+  // Ava's formal post: one photo got a no, which marks it without blocking the others.
+  ...demoRequest('r4', 'ava', 'formal', hoursAgo(30), [
+    {
+      seed: 'formal',
+      tagged: ['marcus', 'priya'],
+      reviews: {
+        marcus: { decision: 'approve', at: hoursAgo(28) },
+        priya: { decision: 'deny', reaction: 'better_one', comment: 'use the one where im not blinking lol', at: hoursAgo(26) },
+      },
     },
-    imageUrl: 'https://picsum.photos/seed/proval-formal/800/1000',
-  },
-  {
-    id: 'm5',
-    uploaderId: 'ava',
-    caption: 'road trip dump',
-    taggedIds: ['jordan', 'leo'],
-    createdAt: hoursAgo(50),
-    // Leo never answered, so the window closing counted as a yes.
-    reviews: { jordan: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(48) } },
-    imageUrl: 'https://picsum.photos/seed/proval-roadtrip/800/1000',
-  },
-  {
-    id: 'm6',
-    uploaderId: 'ava',
-    caption: 'gym mirror',
-    taggedIds: ['leo'],
-    createdAt: hoursAgo(5),
-    reviews: {},
-    imageUrl: 'https://picsum.photos/seed/proval-gym/800/1000',
-  },
-  {
-    id: 'm7',
-    uploaderId: 'ava',
-    caption: '',
-    taggedIds: ['marcus', 'jordan', 'priya'],
-    createdAt: hoursAgo(72),
-    reviews: {
-      marcus: { decision: 'approve', at: hoursAgo(70) },
-      jordan: { decision: 'approve', reaction: 'edit_first', comment: 'warm it up a bit', at: hoursAgo(69) },
-      priya: { decision: 'approve', at: hoursAgo(60) },
+    { seed: 'formal-2', tagged: ['priya'], reviews: { priya: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(26) } } },
+    { seed: 'formal-3', tagged: ['marcus'], reviews: { marcus: { decision: 'approve', at: hoursAgo(28) } } },
+  ]),
+  // Leo never answered, so the window closing counted as a yes.
+  ...demoRequest('r5', 'ava', 'road trip dump', hoursAgo(50), [
+    { seed: 'roadtrip', tagged: ['jordan', 'leo'], reviews: { jordan: { decision: 'approve', reaction: 'obsessed', at: hoursAgo(48) } } },
+    { seed: 'roadtrip-2', tagged: [] },
+    { seed: 'roadtrip-3', tagged: ['leo'] },
+    { seed: 'roadtrip-4', tagged: ['jordan'], reviews: { jordan: { decision: 'approve', at: hoursAgo(48) } } },
+  ]),
+  ...demoRequest('r6', 'ava', 'gym mirror', hoursAgo(5), [{ seed: 'gym', tagged: ['leo'] }]),
+  ...demoRequest('r7', 'ava', '', hoursAgo(72), [
+    {
+      seed: 'lake',
+      tagged: ['marcus', 'jordan', 'priya'],
+      reviews: {
+        marcus: { decision: 'approve', at: hoursAgo(70) },
+        jordan: { decision: 'approve', reaction: 'edit_first', comment: 'warm it up a bit', at: hoursAgo(69) },
+        priya: { decision: 'approve', at: hoursAgo(60) },
+      },
     },
-    imageUrl: 'https://picsum.photos/seed/proval-lake/800/1000',
-  },
+  ]),
 ];
 
 const CORE = ['ava', 'marcus', 'jordan', 'priya', 'leo'];
@@ -114,26 +115,46 @@ export const mockApi: Api = {
     await wait();
     return photos
       .filter((p) => p.taggedIds.includes(userId) && !p.reviews[userId] && !isExpired(p) && !isBlocked(userId, p.uploaderId))
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.position - b.position);
   },
   async myPosts(userId) {
     await wait();
-    return photos.filter((p) => p.uploaderId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return groupRequests(
+      photos.filter((p) => p.uploaderId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    );
   },
-  async submit(input) {
+  async request(userId, requestId) {
+    await wait(120);
+    const [request] = groupRequests(photos.filter((p) => p.requestId === requestId));
+    if (!request || (request.uploaderId !== userId && !request.photos.some((p) => p.taggedIds.includes(userId)))) {
+      throw new Error('That request is gone');
+    }
+    return request;
+  },
+  async submit({ uploaderId, kind, caption, photos: shots }) {
     await wait();
-    const { friends } = friendState(input.uploaderId);
-    if (!input.taggedIds.every((id) => friends.includes(id))) throw new Error('You can only tag friends');
+    const { friends } = friendState(uploaderId);
+    if (shots.length === 0) throw new Error('Add a photo');
+    if (kind === 'story' && shots.length !== 1) throw new Error('A story request has one photo');
+    if (shots.length > MAX_POST_PHOTOS) throw new Error(`A post can have up to ${MAX_POST_PHOTOS} photos`);
+    if (!shots.every((s) => s.taggedIds.every((id) => friends.includes(id)))) throw new Error('You can only tag friends');
+    if (!shots.some((s) => s.taggedIds.length > 0)) throw new Error('Tag at least one friend');
+    const id = `r${Date.now()}`;
+    const createdAt = now();
     photos = [
-      {
-        id: `m${Date.now()}`,
-        uploaderId: input.uploaderId,
-        caption: input.caption,
-        taggedIds: input.taggedIds,
-        createdAt: now(),
+      ...shots.map((s, i) => ({
+        id: `${id}-${i}`,
+        requestId: id,
+        kind,
+        position: i,
+        photoCount: shots.length,
+        uploaderId,
+        caption,
+        taggedIds: s.taggedIds,
+        createdAt,
         reviews: {},
-        imageUrl: input.localUri,
-      },
+        imageUrl: s.localUri,
+      })),
       ...photos,
     ];
   },
@@ -141,13 +162,14 @@ export const mockApi: Api = {
     await wait(100);
     const photo = photos.find((p) => p.id === photoId);
     if (!photo) throw new Error('Photo not found');
+    if (!photo.taggedIds.includes(reviewerId)) throw new Error('You are not tagged in this photo');
     if (isExpired(photo)) throw new Error('Too late, this one already auto-approved');
     const review: Review = { decision, reaction, comment: comment?.trim() || undefined, at: now() };
     photo.reviews = { ...photo.reviews, [reviewerId]: review };
   },
-  async deletePhoto(userId, photoId) {
+  async deleteRequest(userId, requestId) {
     await wait(100);
-    photos = photos.filter((p) => !(p.id === photoId && p.uploaderId === userId));
+    photos = photos.filter((p) => !(p.requestId === requestId && p.uploaderId === userId));
   },
 
   async friends(userId) {

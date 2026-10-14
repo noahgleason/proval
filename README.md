@@ -48,7 +48,7 @@ supabase/           Database migration and the push notification function
 ## Connect Supabase
 
 1. **Create a project** at supabase.com (the free tier is fine).
-2. **Create the database.** Open SQL Editor, paste `supabase/migrations/20261008000000_init.sql`, and run it. With the Supabase CLI you can run `npx supabase link` and then `npx supabase db push` instead.
+2. **Create the database.** Open SQL Editor and run each file in `supabase/migrations/`, oldest first: `20261008000000_init.sql`, then `20261014000000_requests.sql` (story and post requests). With the Supabase CLI you can run `npx supabase link` and then `npx supabase db push` instead.
 3. **Turn on email codes.** Go to Authentication → Sign In / Providers, make sure Email is enabled, and turn off "Confirm email". Then go to Authentication → Email Templates → **Magic Link** and replace the body with something like:
    ```html
    <h2>Your Proval code</h2>

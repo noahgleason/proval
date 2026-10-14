@@ -1,26 +1,54 @@
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import type { Decision, Photo } from '../types';
+import { useRef, useState } from 'react';
+import { Image, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { Decision, Photo, RequestKind } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
 import { AppModal } from './AppModal';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
 
+export type PreviewPost = {
+  uploaderId: string;
+  kind: RequestKind;
+  caption: string;
+  photos: Pick<Photo, 'imageUrl' | 'taggedIds'>[];
+};
+
 type Props = {
-  post: Pick<Photo, 'uploaderId' | 'caption' | 'taggedIds' | 'imageUrl'> | null;
+  post: PreviewPost | null;
   /** Who's looking, so their own name reads as "you". */
   viewerId: string;
   onClose: () => void;
-  /** Reviewers can decide straight from the preview. */
+  /** Which photo to open on. */
+  startIndex?: number;
+  /** Marks one photo as "the one you're answering". */
+  highlightIndex?: number;
+  /** Reviewers can decide straight from the preview of a single photo. */
   onDecide?: (d: Decision) => void;
 };
 
-/** The post as it would land in a feed: who posted it, the photo, the caption, who's tagged. */
-export function PostPreview({ post, viewerId, onClose, onDecide }: Props) {
+/** The post as it would land in a feed: who posted it, the photos (swipe through a carousel), the caption, who's tagged. */
+export function PostPreview({ post, viewerId, onClose, startIndex = 0, highlightIndex, onDecide }: Props) {
+  const [index, setIndex] = useState(startIndex);
+  const [width, setWidth] = useState(0);
+  const scroller = useRef<ScrollView>(null);
   if (!post) return null;
+
   const author = userById(post.uploaderId);
   const mine = post.uploaderId === viewerId;
-  const tagged = post.taggedIds.map((id) => (id === viewerId ? 'you' : userById(id).name));
+  const count = post.photos.length;
+  const current = post.photos[Math.min(index, count - 1)];
+  const tagged = current.taggedIds.map((id) => (id === viewerId ? 'you' : userById(id).name));
+  const title = post.kind === 'story' ? (mine ? 'Your story' : `${author.name}’s story`) : mine ? 'Your post' : `${author.name}’s post`;
+
+  const go = (i: number) => {
+    const next = Math.max(0, Math.min(count - 1, i));
+    setIndex(next);
+    scroller.current?.scrollTo({ x: next * width, animated: true });
+  };
+  const onScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (width > 0) setIndex(Math.round(e.nativeEvent.contentOffset.x / width));
+  };
 
   return (
     <AppModal visible onClose={onClose} kind="page" width={520}>
@@ -28,7 +56,7 @@ export function PostPreview({ post, viewerId, onClose, onDecide }: Props) {
         <View style={styles.top}>
           <View style={{ flex: 1 }}>
             <Text style={styles.eyebrow}>Preview · not posted</Text>
-            <Text style={styles.title}>{mine ? 'Your post' : `${author.name}’s post`}</Text>
+            <Text style={styles.title}>{title}</Text>
           </View>
           <Pressable onPress={onClose} style={styles.close} accessibilityLabel="Close preview">
             <Icon name="x" size={18} color={colors.ink} weight={2.2} />
@@ -46,13 +74,66 @@ export function PostPreview({ post, viewerId, onClose, onDecide }: Props) {
               <Icon name="dots" size={20} color={colors.muted} />
             </View>
 
-            <Image source={{ uri: post.imageUrl }} style={styles.image} />
+            <View
+              style={styles.frame}
+              onLayout={(e) => {
+                const w = e.nativeEvent.layout.width;
+                setWidth(w);
+                scroller.current?.scrollTo({ x: index * w, animated: false });
+              }}
+            >
+              <ScrollView
+                ref={scroller}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={onScrollEnd}
+                onScroll={onScrollEnd}
+                scrollEventThrottle={64}
+                scrollEnabled={count > 1}
+              >
+                {post.photos.map((p, i) => (
+                  <Image key={i} source={{ uri: p.imageUrl }} style={[styles.image, { width: width || 1 }]} />
+                ))}
+              </ScrollView>
+              {count > 1 && (
+                <View style={styles.counter}>
+                  <Text style={styles.counterText}>
+                    {index + 1}/{count}
+                  </Text>
+                </View>
+              )}
+              {highlightIndex === index && count > 1 && (
+                <View style={styles.yours}>
+                  <Icon name="check" size={12} color="#fff" weight={2.8} />
+                  <Text style={styles.yoursText}>The one you’re answering</Text>
+                </View>
+              )}
+              {count > 1 && index > 0 && (
+                <Pressable onPress={() => go(index - 1)} style={[styles.arrow, { left: 10 }]} accessibilityLabel="Previous photo">
+                  <Icon name="chevronLeft" size={18} color={colors.ink} weight={2.4} />
+                </Pressable>
+              )}
+              {count > 1 && index < count - 1 && (
+                <Pressable onPress={() => go(index + 1)} style={[styles.arrow, { right: 10 }]} accessibilityLabel="Next photo">
+                  <Icon name="chevronRight" size={18} color={colors.ink} weight={2.4} />
+                </Pressable>
+              )}
+            </View>
 
             <View style={styles.icons}>
               <Icon name="heart" size={23} />
               <Icon name="bubble" size={23} />
               <Icon name="share" size={22} />
-              <View style={{ flex: 1 }} />
+              <View style={{ flex: 1 }}>
+                {count > 1 && (
+                  <View style={styles.dots}>
+                    {post.photos.map((_, i) => (
+                      <View key={i} style={[styles.dot, i === index && styles.dotOn]} />
+                    ))}
+                  </View>
+                )}
+              </View>
               <Icon name="bookmark" size={22} />
             </View>
 
@@ -65,13 +146,15 @@ export function PostPreview({ post, viewerId, onClose, onDecide }: Props) {
               )}
               <View style={styles.with}>
                 <Icon name="users" size={14} color={colors.muted} weight={2} />
-                <Text style={styles.withText}>with {joinNames(tagged)}</Text>
+                <Text style={styles.withText}>
+                  {tagged.length ? `${count > 1 ? 'This photo: ' : ''}with ${joinNames(tagged)}` : 'Nobody tagged in this photo'}
+                </Text>
               </View>
             </View>
           </View>
         </ScrollView>
 
-        {onDecide && (
+        {onDecide && count === 1 && (
           <View style={styles.actions}>
             <Pressable onPress={() => onDecide('deny')} style={[styles.btn, styles.deny]}>
               <Icon name="x" size={18} color={colors.deny} weight={2.4} />
@@ -111,8 +194,46 @@ const styles = StyleSheet.create({
   postHead: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
   author: { fontWeight: '700', color: colors.ink },
   handle: { color: colors.muted, fontSize: 12 },
-  image: { width: '100%', aspectRatio: 4 / 5, backgroundColor: colors.line },
+  frame: { width: '100%', aspectRatio: 4 / 5, backgroundColor: colors.line },
+  image: { height: '100%', backgroundColor: colors.line },
+  counter: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.scrim,
+  },
+  counterText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  yours: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brand,
+  },
+  yoursText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  arrow: {
+    position: 'absolute',
+    top: '50%',
+    marginTop: -16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   icons: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 14, paddingTop: 12 },
+  dots: { flexDirection: 'row', justifyContent: 'center', gap: 4 },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
+  dotOn: { backgroundColor: colors.brand },
   body: { padding: 14, paddingTop: 10, gap: 8 },
   caption: { color: colors.ink, lineHeight: 20 },
   with: { flexDirection: 'row', alignItems: 'center', gap: 6 },
