@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage } from '../api';
+import { FormPage } from '../components/DesktopBar';
 import { USERNAME_RE, useSession } from '../session';
 import { colors, radius, type } from '../theme';
 
@@ -29,63 +30,65 @@ export default function Onboarding() {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.screen, { paddingTop: insets.top + 52, paddingBottom: insets.bottom + 16 }]}
-    >
-      <Text style={styles.eyebrow}>Almost there</Text>
-      <Text style={styles.h1}>Who are you?</Text>
-      <Text style={styles.sub}>Friends find you by your name or username.</Text>
+    <FormPage>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.screen, { paddingTop: insets.top + 52, paddingBottom: insets.bottom + 16 }]}
+      >
+        <Text style={styles.eyebrow}>Almost there</Text>
+        <Text style={styles.h1}>Who are you?</Text>
+        <Text style={styles.sub}>Friends find you by your name or username.</Text>
 
-      <View style={styles.preview}>
-        <View style={styles.avatar}>
-          <Text style={styles.initial}>{name.trim()[0]?.toUpperCase() ?? '?'}</Text>
+        <View style={styles.preview}>
+          <View style={styles.avatar}>
+            <Text style={styles.initial}>{name.trim()[0]?.toUpperCase() ?? '?'}</Text>
+          </View>
+          <View>
+            <Text style={styles.previewName}>{name.trim() || 'Your name'}</Text>
+            <Text style={styles.previewHandle}>@{handle || 'username'}</Text>
+          </View>
         </View>
-        <View>
-          <Text style={styles.previewName}>{name.trim() || 'Your name'}</Text>
-          <Text style={styles.previewHandle}>@{handle || 'username'}</Text>
-        </View>
-      </View>
 
-      <Text style={styles.label}>Name</Text>
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        placeholder="First name is fine"
-        placeholderTextColor={colors.muted}
-        style={styles.input}
-        maxLength={40}
-        autoComplete="given-name"
-        autoFocus
-      />
-      <Text style={styles.label}>Username</Text>
-      <View style={styles.handleRow}>
-        <Text style={styles.at}>@</Text>
+        <Text style={styles.label}>Name</Text>
         <TextInput
-          value={username}
-          onChangeText={(t) => setUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-          placeholder="username"
+          value={name}
+          onChangeText={setName}
+          placeholder="First name is fine"
           placeholderTextColor={colors.muted}
-          style={[styles.input, { flex: 1, paddingLeft: 4 }]}
-          maxLength={20}
-          autoCapitalize="none"
-          autoCorrect={false}
-          onSubmitEditing={() => canSubmit && submit()}
+          style={styles.input}
+          maxLength={40}
+          autoComplete="given-name"
+          autoFocus
         />
-      </View>
-      <Text style={[styles.hint, handle && !handleOk && { color: colors.deny }]}>
-        3–20 characters: letters, numbers, underscores.
-      </Text>
-      {!!error && <Text style={styles.error}>{error}</Text>}
+        <Text style={styles.label}>Username</Text>
+        <View style={styles.handleRow}>
+          <Text style={styles.at}>@</Text>
+          <TextInput
+            value={username}
+            onChangeText={(t) => setUsername(t.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+            placeholder="username"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, { flex: 1, paddingLeft: 4 }]}
+            maxLength={20}
+            autoCapitalize="none"
+            autoCorrect={false}
+            onSubmitEditing={() => canSubmit && submit()}
+          />
+        </View>
+        <Text style={[styles.hint, handle && !handleOk && { color: colors.deny }]}>
+          3–20 characters: letters, numbers, underscores.
+        </Text>
+        {!!error && <Text style={styles.error}>{error}</Text>}
 
-      <View style={{ flex: 1 }} />
-      <Pressable onPress={submit} disabled={!canSubmit} style={[styles.cta, !canSubmit && { opacity: 0.4 }]}>
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Continue</Text>}
-      </Pressable>
-      <Pressable onPress={signOut} style={styles.out}>
-        <Text style={styles.outText}>Use a different email</Text>
-      </Pressable>
-    </KeyboardAvoidingView>
+        <View style={{ flex: 1 }} />
+        <Pressable onPress={submit} disabled={!canSubmit} style={[styles.cta, !canSubmit && { opacity: 0.4 }]}>
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Continue</Text>}
+        </Pressable>
+        <Pressable onPress={signOut} style={styles.out}>
+          <Text style={styles.outText}>Use a different email</Text>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </FormPage>
   );
 }
 

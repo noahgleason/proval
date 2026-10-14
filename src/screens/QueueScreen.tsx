@@ -1,14 +1,17 @@
-import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { api, errorMessage } from '../api';
 import { ActionSheet } from '../components/ActionSheet';
-import { Icon } from '../components/Icon';
+import { Avatar } from '../components/Avatar';
+import { isHovered } from '../components/DesktopBar';
+import { Icon, type IconName } from '../components/Icon';
+import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
-import { REPORT_REASONS, type Decision, type Photo, type ReactionId, type User } from '../types';
+import { REPORT_REASONS, timeLeft, type Decision, type Photo, type ReactionId, type User } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
 
@@ -23,9 +26,26 @@ export function QueueScreen({ userId }: Props) {
   const [menu, setMenu] = useState<Menu>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const card = useRef<SwipeCardHandle>(null);
+  const desktop = useIsDesktop();
+  const { height: windowHeight } = useWindowDimensions();
+  // Desktop: the card fits the window height, in the photos' 4:5 shape.
+  const cardHeight = Math.min(620, Math.max(380, windowHeight - 240));
+  const cardWidth = Math.round(cardHeight * 0.8);
 
   const current = queue[0];
   const next = queue[1];
+
+  // Desktop: ← and → answer, like swiping.
+  const keysOn = desktop && !!current && !pending && !previewing && menu === null;
+  useEffect(() => {
+    if (!keysOn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') card.current?.swipe('deny');
+      else if (e.key === 'ArrowRight') card.current?.swipe('approve');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keysOn]);
 
   const send = async (reaction?: ReactionId, comment?: string) => {
     if (!current || !pending) return;
@@ -91,59 +111,48 @@ export function QueueScreen({ userId }: Props) {
     );
   }
 
-  return (
-    <View style={styles.wrap}>
+  const head = (
+    <>
       <View style={styles.head}>
         <Text style={styles.eyebrow}>{queue.length === 0 ? 'Inbox zero' : `${queue.length} waiting on you`}</Text>
-        <Text style={styles.h1}>{queue.length === 0 ? 'All caught up' : 'Your call'}</Text>
+        <Text style={[styles.h1, desktop && styles.h1Desktop]}>{queue.length === 0 ? 'All caught up' : 'Your call'}</Text>
       </View>
       {!!error && <Text style={styles.error}>{error}</Text>}
       {!!notice && <Text style={styles.notice}>{notice}</Text>}
+    </>
+  );
 
-      <View style={styles.deck}>
-        {next && <Image source={{ uri: next.imageUrl }} style={styles.behind} />}
-        {current ? (
-          <SwipeCard
-            key={current.id}
-            ref={card}
-            photo={current}
-            onSwiped={setPending}
-            onPreview={() => setPreviewing(true)}
-            onMore={() => setMenu('more')}
-          />
-        ) : (
-          <View style={styles.empty}>
-            <View style={styles.emptyIcon}>
-              <Icon name="inbox" size={28} color={colors.muted} />
-            </View>
-            <Text style={styles.emptyText}>Nothing waiting on you.{'\n'}Your friends can post freely, for now.</Text>
-            <Pressable onPress={reload} style={styles.refresh}>
-              <Icon name="refresh" size={16} color={colors.ink} weight={2} />
-              <Text style={styles.refreshText}>Refresh</Text>
-            </Pressable>
-          </View>
-        )}
+  const empty = (
+    <View style={[styles.empty, desktop && styles.emptyDesktop]}>
+      <View style={styles.emptyIcon}>
+        <Icon name="inbox" size={28} color={colors.muted} />
       </View>
+      <Text style={styles.emptyText}>Nothing waiting on you.{'\n'}Your friends can post freely, for now.</Text>
+      <Pressable onPress={reload} style={styles.refresh}>
+        <Icon name="refresh" size={16} color={colors.ink} weight={2} />
+        <Text style={styles.refreshText}>Refresh</Text>
+      </Pressable>
+    </View>
+  );
 
-      {current && (
-        <View style={styles.actions}>
-          <Pressable
-            onPress={() => card.current?.swipe('deny')}
-            style={({ pressed }) => [styles.round, styles.denyBtn, pressed && styles.pressed]}
-            accessibilityLabel="Deny"
-          >
-            <Icon name="x" size={26} color={colors.deny} weight={2.4} />
-          </Pressable>
-          <Pressable
-            onPress={() => card.current?.swipe('approve')}
-            style={({ pressed }) => [styles.round, styles.approveBtn, pressed && styles.pressed]}
-            accessibilityLabel="Approve"
-          >
-            <Icon name="check" size={28} color="#fff" weight={2.4} />
-          </Pressable>
-        </View>
-      )}
+  const stack = current && (
+    <>
+      {next && <Image source={{ uri: next.imageUrl }} style={styles.behind} />}
+      <SwipeCard
+        key={current.id}
+        ref={card}
+        photo={current}
+        onSwiped={setPending}
+        onPreview={() => setPreviewing(true)}
+        onMore={() => setMenu('more')}
+        width={desktop ? cardWidth : undefined}
+        hideFooter={desktop}
+      />
+    </>
+  );
 
+  const modals = (
+    <>
       <PostPreview
         post={previewing ? (current ?? null) : null}
         viewerId={userId}
@@ -176,7 +185,129 @@ export function QueueScreen({ userId }: Props) {
                 ]
         }
       />
+    </>
+  );
+
+  if (desktop) {
+    return (
+      <ScrollView contentContainerStyle={styles.desktopWrap}>
+        {head}
+        {current ? (
+          <View style={styles.desktopRow}>
+            <View style={{ width: cardWidth, height: cardHeight }}>{stack}</View>
+            <DecisionPanel
+              photo={current}
+              waiting={queue.length - 1}
+              onDecide={(d) => card.current?.swipe(d)}
+              onPreview={() => setPreviewing(true)}
+              onMore={() => setMenu('more')}
+            />
+          </View>
+        ) : (
+          empty
+        )}
+        {modals}
+      </ScrollView>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      {head}
+      <View style={styles.deck}>{current ? stack : empty}</View>
+
+      {current && (
+        <View style={styles.actions}>
+          <Pressable
+            onPress={() => card.current?.swipe('deny')}
+            style={({ pressed }) => [styles.round, styles.denyBtn, pressed && styles.pressed]}
+            accessibilityLabel="Deny"
+          >
+            <Icon name="x" size={26} color={colors.deny} weight={2.4} />
+          </Pressable>
+          <Pressable
+            onPress={() => card.current?.swipe('approve')}
+            style={({ pressed }) => [styles.round, styles.approveBtn, pressed && styles.pressed]}
+            accessibilityLabel="Approve"
+          >
+            <Icon name="check" size={28} color="#fff" weight={2.4} />
+          </Pressable>
+        </View>
+      )}
+      {modals}
     </View>
+  );
+}
+
+type PanelProps = {
+  photo: Photo;
+  waiting: number;
+  onDecide: (d: Decision) => void;
+  onPreview: () => void;
+  onMore: () => void;
+};
+
+/** Desktop: who's asking, what they'll post, and big answer buttons, beside the photo. */
+function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore }: PanelProps) {
+  const uploader = userById(photo.uploaderId);
+  const others = photo.taggedIds.length - 1;
+  return (
+    <View style={styles.panel}>
+      <View style={styles.panelHead}>
+        <Avatar userId={uploader.id} size={48} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.panelTitle}>{uploader.name} wants to post this</Text>
+          <Text style={styles.panelSub}>@{uploader.username}</Text>
+        </View>
+      </View>
+
+      {!!photo.caption && <Text style={styles.panelCaption}>“{photo.caption}”</Text>}
+
+      <View style={styles.facts}>
+        <Fact icon="users" text={others > 0 ? `You and ${others} other${others === 1 ? '' : 's'} are in it` : 'You’re the only one tagged'} />
+        <Fact icon="clock" text={`Counts as a yes in ${timeLeft(photo)} if you don’t answer`} />
+      </View>
+
+      <View style={styles.panelActions}>
+        <Pressable
+          onPress={() => onDecide('deny')}
+          style={(s) => [styles.bigBtn, styles.bigDeny, isHovered(s) && { borderColor: colors.deny }]}
+        >
+          <Icon name="x" size={20} color={colors.deny} weight={2.4} />
+          <Text style={[styles.bigText, { color: colors.deny }]}>Don’t post</Text>
+        </Pressable>
+        <Pressable onPress={() => onDecide('approve')} style={(s) => [styles.bigBtn, styles.bigApprove, isHovered(s) && { opacity: 0.88 }]}>
+          <Icon name="check" size={20} color="#fff" weight={2.4} />
+          <Text style={[styles.bigText, { color: '#fff' }]}>Post it</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.tip}>Tip: press ← or →, or drag the photo.</Text>
+
+      <View style={styles.panelLinks}>
+        <PanelLink icon="eye" label="Preview as a post" onPress={onPreview} />
+        <PanelLink icon="alert" label="Report or block" onPress={onMore} destructive />
+      </View>
+      {waiting > 0 && <Text style={styles.panelSub}>{waiting} more waiting after this one</Text>}
+    </View>
+  );
+}
+
+function Fact({ icon, text }: { icon: IconName; text: string }) {
+  return (
+    <View style={styles.fact}>
+      <Icon name={icon} size={16} color={colors.muted} weight={2} />
+      <Text style={styles.factText}>{text}</Text>
+    </View>
+  );
+}
+
+function PanelLink({ icon, label, onPress, destructive }: { icon: IconName; label: string; onPress: () => void; destructive?: boolean }) {
+  const color = destructive ? colors.deny : colors.ink;
+  return (
+    <Pressable onPress={onPress} style={(s) => [styles.panelLink, isHovered(s) && { backgroundColor: colors.bg }]}>
+      <Icon name={icon} size={17} color={color} weight={2} />
+      <Text style={[styles.panelLinkText, { color }]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -186,6 +317,7 @@ const styles = StyleSheet.create({
   head: { marginTop: 14, marginBottom: 16, gap: 2 },
   eyebrow: { ...type.label, color: colors.brand },
   h1: { ...type.display, color: colors.ink },
+  h1Desktop: { fontSize: 40, letterSpacing: -1.6 },
   error: { color: colors.deny, marginBottom: 8 },
   notice: { color: colors.muted, marginBottom: 8 },
   deck: { flex: 1 },
@@ -236,4 +368,41 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   refreshText: { color: colors.ink, fontWeight: '600' },
+  desktopWrap: { ...desktopPage, paddingTop: 20, paddingBottom: 64 },
+  desktopRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 48 },
+  emptyDesktop: { flex: 0, height: 360, marginBottom: 0 },
+  panel: {
+    flex: 1,
+    maxWidth: 480,
+    backgroundColor: colors.card,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.line,
+    padding: 28,
+    gap: 20,
+  },
+  panelHead: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  panelTitle: { ...type.title, color: colors.ink },
+  panelSub: { color: colors.muted },
+  panelCaption: { fontSize: 17, lineHeight: 25, color: colors.ink },
+  facts: { gap: 10 },
+  fact: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  factText: { color: colors.muted, fontSize: 14 },
+  panelActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  bigBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: radius.pill,
+  },
+  bigDeny: { borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card },
+  bigApprove: { backgroundColor: colors.ink },
+  bigText: { fontSize: 16, fontWeight: '700' },
+  tip: { color: colors.muted, fontSize: 13, textAlign: 'center', marginTop: -8 },
+  panelLinks: { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 12, gap: 2 },
+  panelLink: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 8, borderRadius: radius.sm },
+  panelLinkText: { fontSize: 15, fontWeight: '600' },
 });

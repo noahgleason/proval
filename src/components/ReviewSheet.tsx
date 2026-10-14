@@ -1,18 +1,10 @@
 import { useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { REACTIONS, type Decision, type ReactionId } from '../types';
 import { colors, radius, type } from '../theme';
+import { AppModal } from './AppModal';
 import { Icon, REACTION_ICON } from './Icon';
-import { PhoneFrame } from './PhoneFrame';
+import { useIsDesktop } from './PhoneFrame';
 
 type Props = {
   decision: Decision | null;
@@ -29,6 +21,7 @@ type Props = {
 export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
   const [reaction, setReaction] = useState<ReactionId | undefined>();
   const [comment, setComment] = useState('');
+  const desktop = useIsDesktop();
 
   if (!decision) return null;
   const approve = decision === 'approve';
@@ -36,67 +29,62 @@ export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
   const options = REACTIONS.filter((r) => r.fits === 'both' || r.fits === decision);
 
   return (
-    <Modal transparent animationType="slide" visible onRequestClose={onUndo}>
-      <PhoneFrame transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.backdrop}>
-          <View style={styles.sheet}>
-            <View style={styles.grabber} />
-            <View style={styles.head}>
-              <View style={[styles.verdict, { backgroundColor: accent }]}>
-                <Icon name={approve ? 'check' : 'x'} size={20} color="#fff" weight={2.6} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.title}>{approve ? 'Approved' : 'Denied'}</Text>
-                <Text style={styles.sub}>Tell {askerName || 'them'} where you stand. Optional.</Text>
-              </View>
-            </View>
-
-            <View style={styles.chips}>
-              {options.map((r) => {
-                const on = reaction === r.id;
-                return (
-                  <Pressable
-                    key={r.id}
-                    onPress={() => setReaction(on ? undefined : r.id)}
-                    style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
-                  >
-                    <Icon name={REACTION_ICON[r.id]} size={16} color={on ? '#fff' : colors.ink} weight={1.9} />
-                    <Text style={[styles.chipText, on && { color: '#fff' }]}>{r.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <TextInput
-              value={comment}
-              onChangeText={setComment}
-              placeholder={approve ? 'e.g. cute! maybe brighten it a little' : 'e.g. use the one where I’m smiling'}
-              placeholderTextColor={colors.muted}
-              style={styles.input}
-              maxLength={200}
-              multiline
-            />
-
-            <View style={styles.row}>
-              <Pressable onPress={onUndo} style={[styles.btn, styles.ghost]}>
-                <Icon name="undo" size={18} color={colors.ink} weight={2} />
-                <Text style={[styles.btnText, { color: colors.ink }]}>Undo</Text>
-              </Pressable>
-              <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, styles.primary]}>
-                <Text style={[styles.btnText, { color: '#fff' }]}>
-                  {reaction || comment.trim() ? 'Send' : 'Skip note'}
-                </Text>
-              </Pressable>
-            </View>
+    <AppModal visible onClose={onUndo} kind="sheet" dismissable={false} width={520}>
+      <View style={[styles.sheet, desktop && styles.dialog]}>
+        {!desktop && <View style={styles.grabber} />}
+        <View style={styles.head}>
+          <View style={[styles.verdict, { backgroundColor: accent }]}>
+            <Icon name={approve ? 'check' : 'x'} size={20} color="#fff" weight={2.6} />
           </View>
-        </KeyboardAvoidingView>
-      </PhoneFrame>
-    </Modal>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>{approve ? 'Approved' : 'Denied'}</Text>
+            <Text style={styles.sub}>Tell {askerName || 'them'} where you stand. Optional.</Text>
+          </View>
+        </View>
+
+        <View style={styles.chips}>
+          {options.map((r) => {
+            const on = reaction === r.id;
+            return (
+              <Pressable
+                key={r.id}
+                onPress={() => setReaction(on ? undefined : r.id)}
+                style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
+              >
+                <Icon name={REACTION_ICON[r.id]} size={16} color={on ? '#fff' : colors.ink} weight={1.9} />
+                <Text style={[styles.chipText, on && { color: '#fff' }]}>{r.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <TextInput
+          value={comment}
+          onChangeText={setComment}
+          placeholder={approve ? 'e.g. cute! maybe brighten it a little' : 'e.g. use the one where I’m smiling'}
+          placeholderTextColor={colors.muted}
+          style={styles.input}
+          maxLength={200}
+          multiline
+        />
+
+        <View style={styles.row}>
+          <Pressable onPress={onUndo} style={[styles.btn, styles.ghost]}>
+            <Icon name="undo" size={18} color={colors.ink} weight={2} />
+            <Text style={[styles.btnText, { color: colors.ink }]}>Undo</Text>
+          </Pressable>
+          <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, styles.primary]}>
+            <Text style={[styles.btnText, { color: '#fff' }]}>
+              {reaction || comment.trim() ? 'Send' : 'Skip note'}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    </AppModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim },
   sheet: {
     backgroundColor: colors.card,
     borderTopLeftRadius: radius.lg,
@@ -106,6 +94,7 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     gap: 18,
   },
+  dialog: { borderRadius: radius.lg, paddingTop: 28, paddingHorizontal: 28, paddingBottom: 28 },
   grabber: { alignSelf: 'center', width: 36, height: 4, borderRadius: 2, backgroundColor: colors.line },
   head: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   verdict: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

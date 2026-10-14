@@ -44,3 +44,6 @@ yarn-error.*
 # Supabase CLI
 supabase/.temp/
 supabase/.branches/
+
+# Local Netlify folder
+.netlify

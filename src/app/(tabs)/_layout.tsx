@@ -5,7 +5,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, usingMock } from '../../api';
 import { Avatar } from '../../components/Avatar';
+import { BarButton, DesktopBar, isHovered, NavLink } from '../../components/DesktopBar';
 import { Icon, LogoMark, type IconName } from '../../components/Icon';
+import { useIsDesktop } from '../../components/PhoneFrame';
 import { useSession } from '../../session';
 import { colors, radius } from '../../theme';
 
@@ -17,10 +19,14 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   return (
     <View style={[styles.safe, { paddingTop: insets.top }]}>
-      <Header />
-      <Tabs screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }} tabBar={(p) => <TabBar {...p} />}>
+      {!desktop && <Header />}
+      <Tabs
+        screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, tabBarPosition: desktop ? 'top' : 'bottom' }}
+        tabBar={(p) => (desktop ? <TopNav {...p} /> : <TabBar {...p} />)}
+      >
         <Tabs.Screen name="index" />
         <Tabs.Screen name="review" />
         <Tabs.Screen name="ask" />
@@ -29,11 +35,9 @@ export default function TabsLayout() {
   );
 }
 
-function Header() {
-  const { userId, me } = useSession();
+/** How many friend requests are waiting. Re-checked whenever you come back from the profile. */
+function useFriendRequests(userId: string): number {
   const [requests, setRequests] = useState(0);
-
-  // Re-check friend requests whenever you come back from the profile.
   useFocusEffect(
     useCallback(() => {
       api.friends(userId).then(
@@ -42,6 +46,12 @@ function Header() {
       );
     }, [userId]),
   );
+  return requests;
+}
+
+function Header() {
+  const { userId, me } = useSession();
+  const requests = useFriendRequests(userId);
 
   return (
     <View>
@@ -60,6 +70,42 @@ function Header() {
       </View>
       {usingMock && <Text style={styles.mock}>Demo data · tap your name to switch accounts</Text>}
     </View>
+  );
+}
+
+/** Desktop: the tabs become a website header. */
+function TopNav({ state, navigation }: BottomTabBarProps) {
+  const { userId, me } = useSession();
+  const requests = useFriendRequests(userId);
+  const current = state.routes[state.index]?.name;
+  const go = (name: string) => {
+    const route = state.routes.find((r) => r.name === name);
+    if (!route) return;
+    const e = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+    if (current !== name && !e.defaultPrevented) navigation.navigate(name);
+  };
+
+  return (
+    <DesktopBar onLogoPress={() => go('index')}>
+      <View style={styles.navLinks}>
+        <NavLink label="Dashboard" active={current === 'index'} onPress={() => go('index')} />
+        <NavLink label="Review" active={current === 'review'} onPress={() => go('review')} />
+      </View>
+      <View style={{ flex: 1 }} />
+      {usingMock && <Text style={styles.mockPill}>Demo data</Text>}
+      <BarButton label="New request" solid onPress={() => go('ask')} />
+      <Pressable
+        onPress={() => router.push('/profile')}
+        style={(s) => [styles.me, isHovered(s) && { borderColor: colors.muted }]}
+        accessibilityLabel="Profile and friends"
+      >
+        <Text style={styles.meText}>{me?.name}</Text>
+        <View>
+          <Avatar userId={userId} size={28} />
+          {requests > 0 && <View style={styles.badge} />}
+        </View>
+      </Pressable>
+    </DesktopBar>
   );
 }
 
@@ -129,6 +175,17 @@ const styles = StyleSheet.create({
     borderColor: colors.card,
   },
   mock: { paddingHorizontal: 20, color: colors.muted, fontSize: 12 },
+  navLinks: { flexDirection: 'row', gap: 28, marginLeft: 32 },
+  mockPill: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.pending,
+    backgroundColor: colors.pendingSoft,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
   tabs: {
     flexDirection: 'row',
     borderTopWidth: StyleSheet.hairlineWidth,

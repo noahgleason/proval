@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { errorMessage, usingMock } from '../api';
+import { FormPage } from '../components/DesktopBar';
 import { Icon } from '../components/Icon';
 import { useSession } from '../session';
 import { colors, radius, type } from '../theme';
@@ -40,85 +41,87 @@ export default function SignIn() {
   const canSubmit = !busy && (step === 'email' ? EMAIL_RE.test(email.trim()) : code.length === 6);
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}
-    >
-      <Pressable
-        onPress={() => (step === 'code' ? setStep('email') : router.back())}
-        style={styles.back}
-        accessibilityLabel="Back"
+    <FormPage>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={[styles.screen, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 }]}
       >
-        <Icon name="undo" size={20} color={colors.ink} weight={2} />
-      </Pressable>
-
-      <Text style={styles.eyebrow}>{step === 'email' ? 'Sign in or sign up' : 'Check your email'}</Text>
-      <Text style={styles.h1}>{step === 'email' ? 'What’s your email?' : 'Enter the code'}</Text>
-      <Text style={styles.sub}>
-        {step === 'email'
-          ? 'We’ll send you a 6-digit code. No passwords.'
-          : `We sent a code to ${email.trim()}. It expires in 10 minutes.`}
-      </Text>
-
-      {step === 'email' ? (
-        <TextInput
-          key="email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@example.com"
-          placeholderTextColor={colors.muted}
-          style={styles.input}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          textContentType="emailAddress"
-          autoFocus
-          onSubmitEditing={() => canSubmit && submitEmail()}
-        />
-      ) : (
-        <TextInput
-          key="code"
-          value={code}
-          onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
-          placeholder="••••••"
-          placeholderTextColor={colors.muted}
-          style={[styles.input, styles.code]}
-          keyboardType="number-pad"
-          autoComplete="one-time-code"
-          textContentType="oneTimeCode"
-          autoFocus
-          onSubmitEditing={() => canSubmit && submitCode()}
-        />
-      )}
-
-      {!!error && <Text style={styles.error}>{error}</Text>}
-      {usingMock && <Text style={styles.hint}>Demo mode: any email works, and any 6 digits sign you in as Ava.</Text>}
-      {step === 'code' && (
-        <Pressable onPress={submitEmail} disabled={busy} style={styles.resend}>
-          <Text style={styles.resendText}>Send a new code</Text>
+        <Pressable
+          onPress={() => (step === 'code' ? setStep('email') : router.back())}
+          style={styles.back}
+          accessibilityLabel="Back"
+        >
+          <Icon name="undo" size={20} color={colors.ink} weight={2} />
         </Pressable>
-      )}
 
-      <View style={{ flex: 1 }} />
-      <Text style={styles.legal}>
-        By continuing you agree to the{' '}
-        <Link href="/legal/terms" style={styles.legalLink}>
-          Terms
-        </Link>{' '}
-        and{' '}
-        <Link href="/legal/privacy" style={styles.legalLink}>
-          Privacy Policy
-        </Link>
-        .
-      </Text>
-      <Pressable
-        onPress={step === 'email' ? submitEmail : submitCode}
-        disabled={!canSubmit}
-        style={[styles.cta, !canSubmit && { opacity: 0.4 }]}
-      >
-        {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{step === 'email' ? 'Send code' : 'Sign in'}</Text>}
-      </Pressable>
-    </KeyboardAvoidingView>
+        <Text style={styles.eyebrow}>{step === 'email' ? 'Sign in or sign up' : 'Check your email'}</Text>
+        <Text style={styles.h1}>{step === 'email' ? 'What’s your email?' : 'Enter the code'}</Text>
+        <Text style={styles.sub}>
+          {step === 'email'
+            ? 'We’ll send you a 6-digit code. No passwords.'
+            : `We sent a code to ${email.trim()}. It expires in 10 minutes.`}
+        </Text>
+
+        {step === 'email' ? (
+          <TextInput
+            key="email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={colors.muted}
+            style={styles.input}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            textContentType="emailAddress"
+            autoFocus
+            onSubmitEditing={() => canSubmit && submitEmail()}
+          />
+        ) : (
+          <TextInput
+            key="code"
+            value={code}
+            onChangeText={(t) => setCode(t.replace(/\D/g, '').slice(0, 6))}
+            placeholder="••••••"
+            placeholderTextColor={colors.muted}
+            style={[styles.input, styles.code]}
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
+            autoFocus
+            onSubmitEditing={() => canSubmit && submitCode()}
+          />
+        )}
+
+        {!!error && <Text style={styles.error}>{error}</Text>}
+        {usingMock && <Text style={styles.hint}>Demo mode: any email works, and any 6 digits sign you in as Ava.</Text>}
+        {step === 'code' && (
+          <Pressable onPress={submitEmail} disabled={busy} style={styles.resend}>
+            <Text style={styles.resendText}>Send a new code</Text>
+          </Pressable>
+        )}
+
+        <View style={{ flex: 1 }} />
+        <Text style={styles.legal}>
+          By continuing you agree to the{' '}
+          <Link href="/legal/terms" style={styles.legalLink}>
+            Terms
+          </Link>{' '}
+          and{' '}
+          <Link href="/legal/privacy" style={styles.legalLink}>
+            Privacy Policy
+          </Link>
+          .
+        </Text>
+        <Pressable
+          onPress={step === 'email' ? submitEmail : submitCode}
+          disabled={!canSubmit}
+          style={[styles.cta, !canSubmit && { opacity: 0.4 }]}
+        >
+          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{step === 'email' ? 'Send code' : 'Sign in'}</Text>}
+        </Pressable>
+      </KeyboardAvoidingView>
+    </FormPage>
   );
 }
 

@@ -1,16 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
-import {
-  FlatList,
-  Image,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api, errorMessage } from '../api';
+import { AppModal } from '../components/AppModal';
 import { Avatar } from '../components/Avatar';
 import { Icon, REACTION_ICON, type IconName } from '../components/Icon';
 import { useLoader } from '../hooks/useLoader';
@@ -18,7 +9,7 @@ import { showAlert } from '../lib/alert';
 import { answerOf, reactionFor, statusOf, timeLeft, type Answer, type Photo, type PhotoStatus } from '../types';
 import { colors, radius, type } from '../theme';
 import { userById } from '../users';
-import { PhoneFrame, useScreenWidth } from '../components/PhoneFrame';
+import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
 
 type Props = { userId: string };
 type Layout = 'grid' | 'list';
@@ -39,6 +30,9 @@ const ANSWER: Record<Answer, { text: string; color: string }> = {
 
 const GAP = 6;
 const GUTTER = 20;
+const DESKTOP_GAP = 16;
+/** Desktop grid tiles are about this wide. */
+const DESKTOP_TILE = 210;
 
 /** Everything you've asked about: what's cleared, what's waiting, what got blocked. */
 export function DashboardScreen({ userId }: Props) {
@@ -48,7 +42,10 @@ export function DashboardScreen({ userId }: Props) {
   const [view, setView] = useState<Layout>('grid');
   const [open, setOpen] = useState<Photo | null>(null);
   const width = useScreenWidth();
-  const tile = (width - GUTTER * 2 - GAP * 2) / 3;
+  const desktop = useIsDesktop();
+  const gap = desktop ? DESKTOP_GAP : GAP;
+  const columns = view === 'list' ? (desktop ? 2 : 1) : desktop ? Math.max(3, Math.floor((width + gap) / (DESKTOP_TILE + gap))) : 3;
+  const tile = desktop ? (width - gap * (columns - 1)) / columns : (width - GUTTER * 2 - GAP * 2) / 3;
 
   const withdraw = (photo: Photo) => {
     showAlert('Withdraw this request?', 'The photo is deleted from Proval and your friends stop seeing it.', [
@@ -78,11 +75,11 @@ export function DashboardScreen({ userId }: Props) {
   const shown = filter ? withStatus.filter((x) => x.status === filter) : withStatus;
 
   const header = (
-    <View style={styles.headerWrap}>
+    <View style={[styles.headerWrap, desktop && styles.headerWrapDesktop]}>
       <View style={styles.headRow}>
         <View style={styles.head}>
           <Text style={styles.eyebrow}>{posts.length} sent</Text>
-          <Text style={styles.h1}>Dashboard</Text>
+          <Text style={[styles.h1, desktop && styles.h1Desktop]}>Dashboard</Text>
         </View>
         <View style={styles.toggle}>
           {(['grid', 'list'] as const).map((v) => (
@@ -98,7 +95,7 @@ export function DashboardScreen({ userId }: Props) {
         </View>
       </View>
 
-      <View style={styles.stats}>
+      <View style={[styles.stats, desktop && styles.statsDesktop]}>
         {ORDER.map((s) => {
           const on = filter === s;
           return (
@@ -134,12 +131,16 @@ export function DashboardScreen({ userId }: Props) {
   return (
     <>
       <FlatList
-        key={view}
+        key={`${view}-${columns}`}
         data={shown}
         keyExtractor={(x) => x.photo.id}
-        numColumns={view === 'grid' ? 3 : 1}
-        columnWrapperStyle={view === 'grid' ? { gap: GAP } : undefined}
-        contentContainerStyle={[styles.list, { gap: view === 'grid' ? GAP : 12 }]}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? { gap: view === 'grid' ? gap : 16 } : undefined}
+        contentContainerStyle={[
+          styles.list,
+          desktop && styles.listDesktop,
+          { gap: view === 'grid' ? gap : desktop ? 16 : 12 },
+        ]}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={reload} tintColor={colors.ink} />}
         ListHeaderComponent={header}
         ListEmptyComponent={empty}
@@ -150,24 +151,25 @@ export function DashboardScreen({ userId }: Props) {
               <StatusChip photo={item.photo} status={item.status} />
             </Pressable>
           ) : (
-            <View style={styles.card}>
+            <Pressable onPress={desktop ? () => setOpen(item.photo) : undefined} style={[styles.card, desktop && { flex: 1 }]}>
               <PostDetails photo={item.photo} status={item.status} />
-            </View>
+            </Pressable>
           )
         }
       />
 
-      <Modal visible={!!open} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setOpen(null)}>
-        <PhoneFrame>
-          {open && (
-            <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={styles.sheet}>
+      <AppModal visible={!!open} onClose={() => setOpen(null)} kind="page" width={900}>
+        {open && (
+          <View style={[{ flex: 1 }, desktop && styles.sheetDesktop]}>
+            {desktop && <Image source={{ uri: open.imageUrl }} style={styles.heroDesktop} />}
+            <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={styles.sheet}>
               <View style={styles.sheetTop}>
                 <Text style={styles.sheetTitle}>Request</Text>
                 <Pressable onPress={() => setOpen(null)} style={styles.close} accessibilityLabel="Close">
                   <Icon name="x" size={18} color={colors.ink} weight={2.2} />
                 </Pressable>
               </View>
-              <Image source={{ uri: open.imageUrl }} style={styles.hero} />
+              {!desktop && <Image source={{ uri: open.imageUrl }} style={styles.hero} />}
               <View style={styles.card}>
                 <PostDetails photo={open} status={statusOf(open)} hideThumb />
               </View>
@@ -176,9 +178,9 @@ export function DashboardScreen({ userId }: Props) {
                 <Text style={styles.withdrawText}>Withdraw request</Text>
               </Pressable>
             </ScrollView>
-          )}
-        </PhoneFrame>
-      </Modal>
+          </View>
+        )}
+      </AppModal>
     </>
   );
 }
@@ -243,11 +245,14 @@ function PostDetails({ photo, status, hideThumb }: { photo: Photo; status: Photo
 
 const styles = StyleSheet.create({
   list: { paddingHorizontal: GUTTER, paddingBottom: 24 },
+  listDesktop: { ...desktopPage, paddingTop: 20, paddingBottom: 64 },
   headerWrap: { gap: 16, marginBottom: 10 },
+  headerWrapDesktop: { gap: 24, marginBottom: 12 },
   headRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 14 },
   head: { gap: 2 },
   eyebrow: { ...type.label, color: colors.brand },
   h1: { ...type.display, color: colors.ink },
+  h1Desktop: { fontSize: 40, letterSpacing: -1.6 },
   toggle: {
     flexDirection: 'row',
     padding: 3,
@@ -260,6 +265,7 @@ const styles = StyleSheet.create({
   toggleBtn: { width: 36, height: 30, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   toggleOn: { backgroundColor: colors.ink },
   stats: { flexDirection: 'row', gap: 8 },
+  statsDesktop: { gap: 16, maxWidth: 720 },
   stat: { flex: 1, backgroundColor: colors.card, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: 14, gap: 2 },
   statOn: { backgroundColor: colors.ink },
   statNum: { fontSize: 26, fontWeight: '800', letterSpacing: -1, color: colors.ink },
@@ -334,4 +340,6 @@ const styles = StyleSheet.create({
   withdrawText: { color: colors.deny, fontWeight: '700', fontSize: 16 },
   error: { color: colors.deny },
   hero: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.lg, backgroundColor: colors.line },
+  sheetDesktop: { flexDirection: 'row' },
+  heroDesktop: { width: 420, height: '100%', backgroundColor: colors.line },
 });

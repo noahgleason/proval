@@ -4,6 +4,7 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, Text
 import { api, errorMessage } from '../api';
 import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
+import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
 import { useLoader } from '../hooks/useLoader';
 import { colors, radius, type } from '../theme';
@@ -22,6 +23,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const [previewing, setPreviewing] = useState(false);
+  const desktop = useIsDesktop();
 
   // Refreshes on focus, so friends you just added show up.
   const fetchFriends = useCallback(async () => (await api.friends(userId)).friends, [userId]);
@@ -73,30 +75,27 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
     }
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
-      <View style={styles.head}>
-        <Text style={styles.eyebrow}>New request</Text>
-        <Text style={styles.h1}>Ask first</Text>
-      </View>
-
-      <Pressable onPress={pick} style={styles.picker}>
-        {picked ? (
-          <Image source={{ uri: picked.uri }} style={styles.preview} />
-        ) : (
-          <View style={styles.pickerEmpty}>
-            <View style={styles.pickerIcon}>
-              <Icon name="image" size={26} color={colors.ink} />
-            </View>
-            <Text style={styles.pickerText}>Choose a photo</Text>
-            <Text style={styles.pickerHint}>Nobody sees it until you send</Text>
+  const pickerEl = (
+    <Pressable onPress={pick} style={[styles.picker, desktop && styles.pickerDesktop]}>
+      {picked ? (
+        <Image source={{ uri: picked.uri }} style={styles.preview} />
+      ) : (
+        <View style={styles.pickerEmpty}>
+          <View style={styles.pickerIcon}>
+            <Icon name="image" size={26} color={colors.ink} />
           </View>
-        )}
-      </Pressable>
+          <Text style={styles.pickerText}>Choose a photo</Text>
+          <Text style={styles.pickerHint}>Nobody sees it until you send</Text>
+        </View>
+      )}
+    </Pressable>
+  );
 
+  const formEl = (
+    <>
       <Text style={styles.label}>Who’s in it</Text>
       {!loadingFriends && friendIds.length === 0 && (
-        <Text style={styles.hint}>No friends yet. Add some from your profile (tap your name up top).</Text>
+        <Text style={styles.hint}>No friends yet. Add some from your profile ({desktop ? 'click' : 'tap'} your name up top).</Text>
       )}
       <View style={styles.friends}>
         {friends.map((f) => {
@@ -147,6 +146,27 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
           </>
         )}
       </Pressable>
+    </>
+  );
+
+  return (
+    <ScrollView contentContainerStyle={[styles.wrap, desktop && styles.wrapDesktop]} keyboardShouldPersistTaps="handled">
+      <View style={styles.head}>
+        <Text style={styles.eyebrow}>New request</Text>
+        <Text style={[styles.h1, desktop && styles.h1Desktop]}>Ask first</Text>
+      </View>
+
+      {desktop ? (
+        <View style={styles.columns}>
+          {pickerEl}
+          <View style={styles.form}>{formEl}</View>
+        </View>
+      ) : (
+        <>
+          {pickerEl}
+          {formEl}
+        </>
+      )}
       <PostPreview
         post={
           previewing && picked
@@ -162,9 +182,13 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
 
 const styles = StyleSheet.create({
   wrap: { paddingHorizontal: 20, paddingBottom: 40, gap: 12 },
+  wrapDesktop: { ...desktopPage, paddingTop: 20, paddingBottom: 64, gap: 20 },
+  columns: { flexDirection: 'row', alignItems: 'flex-start', gap: 48 },
+  form: { flex: 1, maxWidth: 520, gap: 12 },
   head: { marginTop: 14, marginBottom: 4, gap: 2 },
   eyebrow: { ...type.label, color: colors.brand },
   h1: { ...type.display, color: colors.ink },
+  h1Desktop: { fontSize: 40, letterSpacing: -1.6 },
   picker: {
     height: 320,
     borderRadius: radius.lg,
@@ -173,6 +197,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
+  pickerDesktop: { width: 440, height: 550, borderWidth: 1, borderColor: colors.line },
   pickerEmpty: { alignItems: 'center', gap: 6 },
   pickerIcon: {
     width: 60,

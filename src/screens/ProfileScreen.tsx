@@ -5,7 +5,9 @@ import { api, errorMessage, usingMock } from '../api';
 import { DEMO_USERS } from '../api/mock';
 import { ActionSheet } from '../components/ActionSheet';
 import { Avatar } from '../components/Avatar';
+import { BarButton, DesktopBar } from '../components/DesktopBar';
 import { Icon, type IconName } from '../components/Icon';
+import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
 import { useSession } from '../session';
@@ -30,6 +32,8 @@ export function ProfileScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const desktop = useIsDesktop();
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   // Debounced search; the results arrive in a callback, never synchronously.
   useEffect(() => {
@@ -112,24 +116,26 @@ export function ProfileScreen() {
 
   const menuUser = menuFor ? userById(menuFor) : null;
 
-  return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
-      <View style={styles.top}>
-        <Avatar userId={userId} size={56} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{me?.name}</Text>
-          <Text style={styles.handle}>
-            @{me?.username} · {state.friends.length} {state.friends.length === 1 ? 'friend' : 'friends'}
-          </Text>
-          {!!email && <Text style={styles.sub}>Signed in as {email}</Text>}
-        </View>
-        <Pressable onPress={() => router.back()} style={styles.close} accessibilityLabel="Close">
+  const you = (
+    <View style={[styles.top, desktop && styles.topDesktop]}>
+      <Avatar userId={userId} size={56} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.title}>{me?.name}</Text>
+        <Text style={styles.handle}>
+          @{me?.username} · {state.friends.length} {state.friends.length === 1 ? 'friend' : 'friends'}
+        </Text>
+        {!!email && <Text style={styles.sub}>Signed in as {email}</Text>}
+      </View>
+      {!desktop && (
+        <Pressable onPress={close} style={styles.close} accessibilityLabel="Close">
           <Icon name="x" size={18} color={colors.ink} weight={2.2} />
         </Pressable>
-      </View>
+      )}
+    </View>
+  );
 
-      {!!error && <Text style={styles.error}>{error}</Text>}
-
+  const people = (
+    <>
       {state.incoming.length > 0 && (
         <Section label={`Requests · ${state.incoming.length}`}>
           {state.incoming.map((id) => (
@@ -205,7 +211,11 @@ export function ProfileScreen() {
           ))}
         </Section>
       )}
+    </>
+  );
 
+  const settings = (
+    <>
       <Section label="Account">
         <LinkRow icon="eye" label="Privacy policy" onPress={() => router.push('/legal/privacy')} />
         <LinkRow icon="list" label="Terms of use" onPress={() => router.push('/legal/terms')} />
@@ -226,20 +236,54 @@ export function ProfileScreen() {
           </View>
         </Section>
       )}
+    </>
+  );
 
-      <ActionSheet
-        visible={!!menuUser}
-        title={menuUser?.name}
-        onClose={() => setMenuFor(null)}
-        options={
-          menuUser
-            ? [
-                { label: 'Remove friend', icon: 'x', onPress: () => act(menuUser.id, api.removeFriend) },
-                { label: `Block ${menuUser.name}`, icon: 'alert', destructive: true, onPress: () => block(menuUser) },
-              ]
-            : []
-        }
-      />
+  const menu = (
+    <ActionSheet
+      visible={!!menuUser}
+      title={menuUser?.name}
+      onClose={() => setMenuFor(null)}
+      options={
+        menuUser
+          ? [
+              { label: 'Remove friend', icon: 'x', onPress: () => act(menuUser.id, api.removeFriend) },
+              { label: `Block ${menuUser.name}`, icon: 'alert', destructive: true, onPress: () => block(menuUser) },
+            ]
+          : []
+      }
+    />
+  );
+
+  if (desktop) {
+    return (
+      <View style={styles.screen}>
+        <DesktopBar onLogoPress={close}>
+          <View style={{ flex: 1 }} />
+          <BarButton label="Done" onPress={close} />
+        </DesktopBar>
+        <ScrollView contentContainerStyle={styles.desktopWrap} keyboardShouldPersistTaps="handled">
+          <View style={styles.side}>
+            {you}
+            {settings}
+          </View>
+          <View style={styles.main}>
+            {!!error && <Text style={styles.error}>{error}</Text>}
+            {people}
+          </View>
+        </ScrollView>
+        {menu}
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.wrap} keyboardShouldPersistTaps="handled">
+      {you}
+      {!!error && <Text style={styles.error}>{error}</Text>}
+      {people}
+      {settings}
+      {menu}
     </ScrollView>
   );
 }
@@ -307,7 +351,11 @@ function SmallBtn({
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   wrap: { padding: 20, gap: 22, paddingBottom: 48 },
+  desktopWrap: { ...desktopPage, flexDirection: 'row', alignItems: 'flex-start', gap: 40, paddingTop: 40, paddingBottom: 64 },
+  side: { width: 340, gap: 22 },
+  main: { flex: 1, maxWidth: 640, gap: 22 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  topDesktop: { backgroundColor: colors.card, borderRadius: radius.md + 2, padding: 20 },
   title: { ...type.title, color: colors.ink },
   handle: { color: colors.muted, marginTop: 1 },
   close: {

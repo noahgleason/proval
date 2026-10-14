@@ -18,6 +18,10 @@ type Props = {
   onSwiped: (d: Decision) => void;
   onPreview: () => void;
   onMore: () => void;
+  /** The card's width, when it isn't the screen's (desktop). */
+  width?: number;
+  /** Desktop shows the sender and caption beside the card instead of on it. */
+  hideFooter?: boolean;
   ref?: Ref<SwipeCardHandle>;
 };
 
@@ -26,8 +30,9 @@ const decided = (d: Decision) =>
   Haptics.notificationAsync(d === 'approve' ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning);
 
 /** Tinder-style card: drag right to approve, left to deny. Runs on the UI thread. */
-export function SwipeCard({ photo, onSwiped, onPreview, onMore, ref }: Props) {
-  const width = useScreenWidth();
+export function SwipeCard({ photo, onSwiped, onPreview, onMore, width: cardWidth, hideFooter, ref }: Props) {
+  const screenWidth = useScreenWidth();
+  const width = cardWidth ?? screenWidth;
   const threshold = width * 0.28;
   const x = useSharedValue(0);
   const y = useSharedValue(0);
@@ -112,23 +117,25 @@ export function SwipeCard({ photo, onSwiped, onPreview, onMore, ref }: Props) {
           <Icon name="dots" size={20} color="#fff" />
         </Pressable>
 
-        <View style={styles.footer}>
-          <Avatar userId={uploader.id} size={36} ring="#fff" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.from}>{uploader.name} wants to post</Text>
-            {!!photo.caption && (
-              <Text style={styles.caption} numberOfLines={2}>
-                “{photo.caption}”
+        {!hideFooter && (
+          <View style={styles.footer}>
+            <Avatar userId={uploader.id} size={36} ring="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.from}>{uploader.name} wants to post</Text>
+              {!!photo.caption && (
+                <Text style={styles.caption} numberOfLines={2}>
+                  “{photo.caption}”
+                </Text>
+              )}
+              <Text style={styles.meta}>
+                {others > 0 ? `You + ${others} other${others === 1 ? '' : 's'} · ` : ''}auto-approves in {timeLeft(photo)}
               </Text>
-            )}
-            <Text style={styles.meta}>
-              {others > 0 ? `You + ${others} other${others === 1 ? '' : 's'} · ` : ''}auto-approves in {timeLeft(photo)}
-            </Text>
+            </View>
+            <Pressable onPress={onPreview} style={styles.preview} accessibilityLabel="Preview the post" hitSlop={8}>
+              <Icon name="eye" size={18} color={colors.ink} weight={2} />
+            </Pressable>
           </View>
-          <Pressable onPress={onPreview} style={styles.preview} accessibilityLabel="Preview the post" hitSlop={8}>
-            <Icon name="eye" size={18} color={colors.ink} weight={2} />
-          </Pressable>
-        </View>
+        )}
       </Animated.View>
     </GestureDetector>
   );

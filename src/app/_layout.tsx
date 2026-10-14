@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { PhoneFrame } from '../components/PhoneFrame';
+import { PhoneFrame, useIsDesktop } from '../components/PhoneFrame';
 import { urlFromResponse } from '../notifications';
 import { SessionProvider, useSession } from '../session';
 import { colors } from '../theme';
@@ -28,6 +28,8 @@ export default function RootLayout() {
 function RootStack() {
   const { status } = useSession();
   const ready = status === 'ready';
+  // Desktop opens these as ordinary pages; phones slide them up.
+  const presentation = useIsDesktop() ? 'card' : 'modal';
 
   // Tapping a notification opens the screen it's about.
   useEffect(() => {
@@ -55,7 +57,7 @@ function RootStack() {
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
       <Stack.Protected guard={ready}>
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="profile" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="profile" options={{ presentation }} />
       </Stack.Protected>
       <Stack.Protected guard={status === 'signedOut'}>
         <Stack.Screen name="welcome" />
@@ -64,7 +66,7 @@ function RootStack() {
       <Stack.Protected guard={status === 'needsProfile'}>
         <Stack.Screen name="onboarding" />
       </Stack.Protected>
-      <Stack.Screen name="legal/[doc]" options={{ presentation: 'modal' }} />
+      <Stack.Screen name="legal/[doc]" options={{ presentation }} />
     </Stack>
   );
 }
