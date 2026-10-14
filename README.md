@@ -54,7 +54,7 @@ supabase/           Database migration and the push notification function
    <h2>Your Proval code</h2>
    <p>Enter this code in the app: <strong>{{ .Token }}</strong></p>
    ```
-   Without `{{ .Token }}` the email only has a link, and the app needs the code.
+   Without `{{ .Token }}` the email only has a link, and the app needs the code. Supabase only lets you edit templates after you set up custom SMTP (step 5), so do that first, or use Google sign-in until then.
 4. **Add the keys** to `.env.local` (see `.env.example`), from Project Settings → API:
    ```
    EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co

@@ -1,8 +1,8 @@
 // Plain-language policies shown in the app (Profile → Account) and linked from
 // sign-in. Have someone qualified review these before a public launch.
 
-// TODO before launch: a real inbox you check.
-export const CONTACT_EMAIL = 'hello@proval.app';
+// Forwards to the owner's inbox (Cloudflare Email Routing).
+export const CONTACT_EMAIL = 'hello@getproval.app';
 export const LAST_UPDATED = 'October 8, 2026';
 
 export type LegalDoc = { title: string; sections: { heading: string; body: string }[] };
