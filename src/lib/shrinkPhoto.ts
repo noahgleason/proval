@@ -13,7 +13,8 @@ export type ShrunkPhoto = { uri: string; base64: string; mimeType: 'image/jpeg' 
 export async function shrinkPhoto(uri: string, width: number, height: number): Promise<ShrunkPhoto> {
   const context = ImageManipulator.manipulate(uri);
   if (Math.max(width, height) > MAX_SIDE) {
-    context.resize(width >= height ? { width: MAX_SIDE, height: null } : { width: null, height: MAX_SIDE });
+    // Give only one side; the web version reads a null side as 0 instead of "keep the aspect ratio".
+    context.resize(width >= height ? { width: MAX_SIDE } : { height: MAX_SIDE });
   }
   const image = await context.renderAsync();
   const result = await image.saveAsync({ format: SaveFormat.JPEG, compress: JPEG_QUALITY, base64: true });
