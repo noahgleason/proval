@@ -1,4 +1,4 @@
-import type { Decision, FriendState, LinkPreview, Photo, PhotoRequest, ReactionId, RequestKind, User } from '../types';
+import type { Decision, FriendState, InvitePreview, LinkPreview, Photo, PhotoRequest, ReactionId, RequestKind, User } from '../types';
 import { mockApi } from './mock';
 import { supabaseApi } from './supabase';
 import type { AvatarPhoto } from '../lib/avatarPhoto';
@@ -86,6 +86,13 @@ export interface Api {
   badges(userId: string): Promise<{ review: number; dashboard: number }>;
   /** You opened the Dashboard: its number clears, on every device. */
   markDashboardSeen(userId: string): Promise<void>;
+
+  /** Your invite link's code (getproval.app/i/<code>). */
+  myInviteCode(userId: string): Promise<string>;
+  /** The invite page. Works signed out. Null if the code doesn't exist. */
+  invitePreview(userId: string, code: string): Promise<InvitePreview | null>;
+  /** Sends the inviter a friend request, or accepts theirs. */
+  acceptInvite(userId: string, code: string): Promise<void>;
 
   friends(userId: string): Promise<FriendState>;
   /** Sends a friend request, or accepts theirs if they already asked you. */

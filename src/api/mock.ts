@@ -329,6 +329,32 @@ export const mockApi: Api = {
     dashboardSeen.set(userId, now());
   },
 
+  async myInviteCode(userId) {
+    return `demo-${userId}`;
+  },
+  async invitePreview(userId, code) {
+    await wait(120);
+    const inviter = DEMO_USERS.find((u) => `demo-${u.id}` === code);
+    if (!inviter) return null;
+    if (!userId) return { inviter, relation: null };
+    if (userId === inviter.id) return { inviter, relation: 'self' };
+    if (isBlocked(userId, inviter.id)) return { inviter, relation: 'blocked' };
+    const s = friendState(userId);
+    const relation = s.friends.includes(inviter.id)
+      ? 'friends'
+      : s.outgoing.includes(inviter.id)
+        ? 'requested'
+        : s.incoming.includes(inviter.id)
+          ? 'they_asked'
+          : 'none';
+    return { inviter, relation };
+  },
+  async acceptInvite(userId, code) {
+    const inviter = DEMO_USERS.find((u) => `demo-${u.id}` === code);
+    if (!inviter) throw new Error('That invite link doesn’t work');
+    await mockApi.addFriend(userId, inviter.id);
+  },
+
   async friends(userId) {
     await wait(120);
     return friendState(userId);

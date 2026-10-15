@@ -6,7 +6,8 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PhoneFrame, useIsDesktop } from '../components/PhoneFrame';
-import { takePendingLink } from '../lib/share';
+import { api } from '../api';
+import { takePendingInvite, takePendingLink } from '../lib/share';
 import { urlFromResponse } from '../notifications';
 import { SessionProvider, useSession } from '../session';
 import { colors } from '../theme';
@@ -34,7 +35,7 @@ function ThemedStatusBar() {
 }
 
 function RootStack() {
-  const { status } = useSession();
+  const { status, userId } = useSession();
   const ready = status === 'ready';
   // Desktop opens these as ordinary pages; phones slide them up.
   const presentation = useIsDesktop() ? 'card' : 'modal';
@@ -53,12 +54,19 @@ function RootStack() {
     return () => sub.remove();
   }, [ready]);
 
-  // Signed in from a group-chat link (Google sign-in leaves and returns to /): go back to it.
+  // Signed in from a group-chat or invite link (Google sign-in leaves and returns to /): go back to it.
+  // Joining through an invite sends the inviter a friend request.
   useEffect(() => {
     if (!ready) return;
     const token = takePendingLink();
-    if (token) setTimeout(() => router.replace(`/l/${token}` as never), 0);
-  }, [ready]);
+    const invite = takePendingInvite();
+    if (token) {
+      if (invite) api.acceptInvite(userId, invite).catch(() => {});
+      setTimeout(() => router.replace(`/l/${token}` as never), 0);
+    } else if (invite) {
+      setTimeout(() => router.replace(`/i/${invite}?join=1` as never), 0);
+    }
+  }, [ready, userId]);
 
   if (status === 'loading') {
     return (
@@ -84,6 +92,7 @@ function RootStack() {
       <Stack.Screen name="legal/[doc]" options={{ presentation }} />
       {/* Group-chat links work signed in or out. */}
       <Stack.Screen name="l/[token]" />
+      <Stack.Screen name="i/[code]" />
     </Stack>
   );
 }

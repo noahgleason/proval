@@ -33,21 +33,37 @@ export async function shareText(message: string): Promise<'shared' | 'copied' | 
   return 'copied';
 }
 
-/** Remembers a link across signing in (Google sign-in leaves the page and comes back to /). */
-const PENDING_KEY = 'proval.pendingLink';
+/** Your invite link: whoever signs up through it sends you a friend request. */
+export function inviteUrl(code: string): string {
+  const origin = Platform.OS === 'web' ? window.location.origin : 'https://getproval.app';
+  return `${origin}/i/${code}`;
+}
 
-export function rememberPendingLink(token: string) {
+export function inviteMessage(code: string): string {
+  return `I’m using Proval so friends can okay photos before they’re posted. Join me: ${inviteUrl(code)}`;
+}
+
+// Remembers a link across signing in (Google sign-in leaves the page and comes back to /).
+const PENDING_LINK = 'proval.pendingLink';
+const PENDING_INVITE = 'proval.pendingInvite';
+
+function remember(key: string, value: string) {
   try {
-    localStorage.setItem(PENDING_KEY, token);
+    localStorage.setItem(key, value);
   } catch {}
 }
 
-export function takePendingLink(): string | null {
+function take(key: string): string | null {
   try {
-    const token = localStorage.getItem(PENDING_KEY);
-    localStorage.removeItem(PENDING_KEY);
-    return token;
+    const value = localStorage.getItem(key);
+    localStorage.removeItem(key);
+    return value;
   } catch {
     return null;
   }
 }
+
+export const rememberPendingLink = (token: string) => remember(PENDING_LINK, token);
+export const takePendingLink = () => take(PENDING_LINK);
+export const rememberPendingInvite = (code: string) => remember(PENDING_INVITE, code);
+export const takePendingInvite = () => take(PENDING_INVITE);

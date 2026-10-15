@@ -4,6 +4,7 @@ import {
   friendStateFor,
   groupRequests,
   type Friendship,
+  type InvitePreview,
   type LinkPreview,
   type Photo,
   type ReactionId,
@@ -242,6 +243,24 @@ export const supabaseApi: Api = {
 
   async markDashboardSeen() {
     check(await sb().rpc('mark_dashboard_seen'));
+  },
+
+  async myInviteCode(userId) {
+    const row = check(await sb().from('profiles').select('invite_code').eq('id', userId).single()) as { invite_code: string };
+    return row.invite_code;
+  },
+
+  async invitePreview(_userId, code) {
+    type Row = ProfileRow & { relation: InvitePreview['relation'] };
+    const r = check(await sb().rpc('invite_preview', { code })) as Row | null;
+    if (!r) return null;
+    const inviter = toUser(r);
+    rememberUsers([inviter]);
+    return { inviter, relation: r.relation };
+  },
+
+  async acceptInvite(_userId, code) {
+    check(await sb().rpc('accept_invite', { code }));
   },
 
   async friends(userId) {

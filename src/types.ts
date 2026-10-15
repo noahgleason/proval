@@ -202,6 +202,12 @@ export function taggedInRequest(request: PhotoRequest): string[] {
   return [...new Set(request.photos.flatMap((p) => p.taggedIds))];
 }
 
+/** Who invited you, and where you two stand. `relation` is null when signed out. */
+export type InvitePreview = {
+  inviter: User;
+  relation: null | 'self' | 'blocked' | 'none' | 'friends' | 'requested' | 'they_asked';
+};
+
 /** What a request's group-chat link page shows. Names only appear once you're signed in. */
 export type LinkPreview =
   | { off: true; sender: string }

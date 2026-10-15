@@ -12,6 +12,7 @@ import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
 import { avatarPhoto } from '../lib/avatarPhoto';
+import { inviteMessage, inviteUrl, shareText } from '../lib/share';
 import { useSession } from '../session';
 import type { FriendState, User } from '../types';
 import { colors, radius, type, type ThemeMode } from '../theme';
@@ -256,6 +257,9 @@ export function ProfileScreen() {
 
   const settings = (
     <>
+      <Section label="Invite friends">
+        <InviteRow userId={userId} />
+      </Section>
       <Section label="Appearance">
         <ThemePicker />
       </Section>
@@ -374,6 +378,43 @@ function LinkRow({ icon, label, onPress, destructive }: { icon: IconName; label:
   );
 }
 
+/** Your invite link. Anyone who joins through it sends you a friend request. */
+function InviteRow({ userId }: { userId: string }) {
+  const [code, setCode] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.myInviteCode(userId).then(setCode, () => setNote('Couldn’t load your invite link'));
+  }, [userId]);
+
+  const share = async () => {
+    if (!code) return;
+    try {
+      if ((await shareText(inviteMessage(code))) === 'copied') setNote('Copied. Paste it anywhere.');
+    } catch (e) {
+      setNote(errorMessage(e, 'Couldn’t share the link'));
+    }
+  };
+
+  return (
+    <View style={styles.themeWrap}>
+      <Text style={styles.sub}>
+        Share Proval with anyone. When they join through your link, they send you a friend request automatically.
+      </Text>
+      {!!code && (
+        <Text style={styles.inviteLink} numberOfLines={1} selectable>
+          {inviteUrl(code).replace(/^https?:\/\//, '')}
+        </Text>
+      )}
+      <Pressable onPress={share} disabled={!code} style={[styles.inviteBtn, !code && { opacity: 0.4 }]}>
+        <Icon name="share" size={17} color={colors.onInk} weight={2.2} />
+        <Text style={styles.inviteBtnText}>Share invite link</Text>
+      </Pressable>
+      {!!note && <Text style={styles.sub}>{note}</Text>}
+    </View>
+  );
+}
+
 const THEMES: { id: ThemeMode; label: string }[] = [
   { id: 'system', label: 'System' },
   { id: 'light', label: 'Light' },
@@ -479,6 +520,24 @@ const styles = StyleSheet.create({
   error: { color: colors.deny },
   section: { gap: 8 },
   themeWrap: { padding: 14, gap: 10 },
+  inviteLink: {
+    color: colors.ink,
+    fontWeight: '600',
+    backgroundColor: colors.bg,
+    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  inviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.ink,
+    borderRadius: radius.pill,
+    paddingVertical: 13,
+  },
+  inviteBtnText: { color: colors.onInk, fontWeight: '700', fontSize: 15 },
   themes: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: colors.bg },
   theme: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: radius.pill },
   themeOn: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
