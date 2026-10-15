@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { api } from './api';
 
@@ -47,4 +47,37 @@ export function useBadges(userId: string): Badges {
   }, [userId]);
 
   return badges;
+}
+
+/**
+ * People asking to be your friend. Re-checked like the tab numbers (every 45s, when the app comes
+ * back, on refreshBadges()) and on reload().
+ */
+export function useIncomingRequests(userId: string): { incoming: string[]; reload: () => void } {
+  const [incoming, setIncoming] = useState<string[]>([]);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!userId) return;
+    let live = true;
+    const check = () => {
+      api.friends(userId).then(
+        (s) => live && setIncoming(s.incoming),
+        () => {},
+      );
+    };
+    check();
+    listeners.add(check);
+    const timer = setInterval(check, POLL_MS);
+    const app = AppState.addEventListener('change', (s) => s === 'active' && check());
+    return () => {
+      live = false;
+      listeners.delete(check);
+      clearInterval(timer);
+      app.remove();
+    };
+  }, [userId, tick]);
+
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+  return { incoming, reload };
 }

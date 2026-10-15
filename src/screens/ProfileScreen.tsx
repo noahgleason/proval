@@ -11,6 +11,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
+import { refreshBadges } from '../badges';
 import { avatarPhoto } from '../lib/avatarPhoto';
 import { inviteMessage, inviteUrl, shareText } from '../lib/share';
 import { useSession } from '../session';
@@ -56,6 +57,7 @@ export function ProfileScreen() {
     try {
       const friends = await fn(userId, otherId);
       setData((d) => ({ ...d, friends }));
+      refreshBadges();
     } catch (e) {
       setError(errorMessage(e));
     } finally {

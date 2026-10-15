@@ -1,11 +1,11 @@
 import { router, useFocusEffect } from 'expo-router';
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
-import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api, usingMock } from '../../api';
+import { usingMock } from '../../api';
 import { Avatar } from '../../components/Avatar';
-import { useBadges, type Badges } from '../../badges';
+import { useBadges, useIncomingRequests, type Badges } from '../../badges';
+import { FriendRequestBanner } from '../../components/FriendRequestBanner';
 import { BarButton, CountBubble, DesktopBar, isHovered, NavLink } from '../../components/DesktopBar';
 import { Icon, LogoMark, type IconName } from '../../components/Icon';
 import { useIsDesktop } from '../../components/PhoneFrame';
@@ -21,12 +21,27 @@ const TABS: Record<string, { label: string; icon: IconName }> = {
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
+  const { userId } = useSession();
+  const { incoming, reload } = useIncomingRequests(userId);
+  // Coming back from the profile (where requests are answered) re-checks.
+  useFocusEffect(reload);
+  const requests = incoming.length;
   return (
     <View style={[styles.safe, { paddingTop: insets.top }]}>
-      {!desktop && <Header />}
+      {!desktop && <Header requests={requests} />}
+      {!desktop && <FriendRequestBanner userId={userId} incoming={incoming} />}
       <Tabs
         screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, tabBarPosition: desktop ? 'top' : 'bottom' }}
-        tabBar={(p) => (desktop ? <TopNav {...p} /> : <TabBar {...p} />)}
+        tabBar={(p) =>
+          desktop ? (
+            <View>
+              <TopNav {...p} requests={requests} />
+              <FriendRequestBanner userId={userId} incoming={incoming} desktop />
+            </View>
+          ) : (
+            <TabBar {...p} />
+          )
+        }
       >
         <Tabs.Screen name="index" />
         <Tabs.Screen name="review" />
@@ -36,23 +51,13 @@ export default function TabsLayout() {
   );
 }
 
-/** How many friend requests are waiting. Re-checked whenever you come back from the profile. */
-function useFriendRequests(userId: string): number {
-  const [requests, setRequests] = useState(0);
-  useFocusEffect(
-    useCallback(() => {
-      api.friends(userId).then(
-        (s) => setRequests(s.incoming.length),
-        () => setRequests(0),
-      );
-    }, [userId]),
-  );
-  return requests;
+/** Your name and photo, with how many friend requests are waiting. */
+function FriendCount({ requests }: { requests: number }) {
+  return <CountBubble count={requests} style={styles.friendBubble} />;
 }
 
-function Header() {
+function Header({ requests }: { requests: number }) {
   const { userId, me } = useSession();
-  const requests = useFriendRequests(userId);
 
   return (
     <View>
@@ -61,11 +66,15 @@ function Header() {
           <LogoMark size={26} />
           <Text style={styles.logo}>proval</Text>
         </View>
-        <Pressable onPress={() => router.push('/profile')} style={styles.me} accessibilityLabel="Profile and friends">
+        <Pressable
+          onPress={() => router.push('/profile')}
+          style={styles.me}
+          accessibilityLabel={requests ? `Profile and friends, ${requests} friend ${requests === 1 ? 'request' : 'requests'}` : 'Profile and friends'}
+        >
           <Text style={styles.meText}>{me?.name}</Text>
           <View>
             <Avatar userId={userId} size={28} />
-            {requests > 0 && <View style={styles.badge} />}
+            <FriendCount requests={requests} />
           </View>
         </Pressable>
       </View>
@@ -75,9 +84,8 @@ function Header() {
 }
 
 /** Desktop: the tabs become a website header. */
-function TopNav({ state, navigation }: BottomTabBarProps) {
+function TopNav({ state, navigation, requests }: BottomTabBarProps & { requests: number }) {
   const { userId, me } = useSession();
-  const requests = useFriendRequests(userId);
   const current = state.routes[state.index]?.name;
   const badges = useBadges(userId);
   const go = (name: string) => {
@@ -99,12 +107,12 @@ function TopNav({ state, navigation }: BottomTabBarProps) {
       <Pressable
         onPress={() => router.push('/profile')}
         style={(s) => [styles.me, isHovered(s) && { borderColor: colors.muted }]}
-        accessibilityLabel="Profile and friends"
+        accessibilityLabel={requests ? `Profile and friends, ${requests} friend ${requests === 1 ? 'request' : 'requests'}` : 'Profile and friends'}
       >
         <Text style={styles.meText}>{me?.name}</Text>
         <View>
           <Avatar userId={userId} size={28} />
-          {requests > 0 && <View style={styles.badge} />}
+          <FriendCount requests={requests} />
         </View>
       </Pressable>
     </DesktopBar>
@@ -180,17 +188,7 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   meText: { fontWeight: '600', color: colors.ink },
-  badge: {
-    position: 'absolute',
-    top: -1,
-    right: -1,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.brand,
-    borderWidth: 2,
-    borderColor: colors.card,
-  },
+  friendBubble: { position: 'absolute', top: -7, right: -8, borderWidth: 2, borderColor: colors.card },
   mock: { paddingHorizontal: 20, color: colors.muted, fontSize: 12 },
   navLinks: { flexDirection: 'row', gap: 28, marginLeft: 32 },
   mockPill: {
