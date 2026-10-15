@@ -13,7 +13,10 @@ import {
   statusOf,
   taggedInRequest,
   timeLeft,
+  unclaimed,
+  isExpired,
   type Answer,
+  type Guest,
   type Photo,
   type PhotoRequest,
   type PhotoStatus,
@@ -22,6 +25,8 @@ import { colors, radius, type } from '../theme';
 import { userById } from '../users';
 import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
+import { ShareLinkSheet } from '../components/ShareLinkSheet';
+import { useSession } from '../session';
 
 type Props = { userId: string };
 type Layout = 'grid' | 'list';
@@ -57,6 +62,8 @@ export function DashboardScreen({ userId }: Props) {
   /** Which photo of the open request the desktop dialog shows large. */
   const [focus, setFocus] = useState(0);
   const [previewAt, setPreviewAt] = useState<number | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const { me } = useSession();
   const width = useScreenWidth();
   const desktop = useIsDesktop();
   const gap = desktop ? DESKTOP_GAP : GAP;
@@ -91,6 +98,28 @@ export function DashboardScreen({ userId }: Props) {
       ],
     );
   };
+
+  /** Reset or settle a name, then show the request as it is now. */
+  const changeGuest = async (fn: () => Promise<void>) => {
+    if (!open) return;
+    try {
+      await fn();
+      const fresh = await api.request(userId, open.id);
+      setOpen(fresh);
+      setRequests((rs) => rs.map((r) => (r.id === fresh.id ? fresh : r)));
+    } catch (e) {
+      showAlert('Couldn’t change that', errorMessage(e));
+    }
+  };
+
+  const resetGuest = (g: Guest) =>
+    showAlert(`Reset “${g.name}”?`, `${userById(g.claimedBy!).name} stops being tagged as ${g.name}, and anything they answered is cleared. The name opens up again on the link.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reset', style: 'destructive', onPress: () => changeGuest(() => api.resetGuest(userId, g.id)) },
+    ]);
+
+  const settleGuest = (g: Guest, switchToFlagger: boolean) =>
+    changeGuest(() => api.resolveGuest(userId, g.id, switchToFlagger));
 
   const withStatus = useMemo(() => requests.map((r) => ({ request: r, status: requestStatusOf(r) })), [requests]);
   const counts = useMemo(() => {
@@ -219,6 +248,15 @@ export function DashboardScreen({ userId }: Props) {
                 {single && <PhotoAnswers photo={open.photos[0]} />}
               </View>
 
+              {open.guests.length > 0 && (
+                <View style={styles.card}>
+                  <Text style={styles.caption}>Tagged by name</Text>
+                  {open.guests.map((g) => (
+                    <GuestRow key={g.id} guest={g} onReset={() => resetGuest(g)} onSettle={(sw) => settleGuest(g, sw)} />
+                  ))}
+                </View>
+              )}
+
               {!single &&
                 open.photos.map((p, i) => (
                   <Pressable
@@ -233,13 +271,21 @@ export function DashboardScreen({ userId }: Props) {
                         <StatusBadge photo={p} />
                       </View>
                     </View>
-                    {p.taggedIds.length ? <PhotoAnswers photo={p} /> : <Text style={styles.muted}>Nobody tagged in this one.</Text>}
+                    {p.taggedIds.length || p.guests.length ? (
+                      <PhotoAnswers photo={p} />
+                    ) : (
+                      <Text style={styles.muted}>Nobody tagged in this one.</Text>
+                    )}
                   </Pressable>
                 ))}
 
               <Pressable onPress={() => setPreviewAt(desktop ? focus : 0)} style={styles.secondary}>
                 <Icon name="eye" size={18} color={colors.ink} weight={2} />
                 <Text style={styles.secondaryText}>{single ? 'Preview post' : 'Preview whole post'}</Text>
+              </Pressable>
+              <Pressable onPress={() => setSharing(true)} style={styles.secondary}>
+                <Icon name="link" size={18} color={colors.ink} weight={2} />
+                <Text style={styles.secondaryText}>Group chat link</Text>
               </Pressable>
               <Pressable onPress={() => withdraw(open)} style={styles.withdraw}>
                 <Icon name="trash" size={18} color={colors.deny} weight={2} />
@@ -254,6 +300,14 @@ export function DashboardScreen({ userId }: Props) {
           viewerId={userId}
           startIndex={previewAt ?? 0}
           onClose={() => setPreviewAt(null)}
+        />
+        <ShareLinkSheet
+          key={`${open?.id}-${sharing}`}
+          requestId={open && sharing ? open.id : null}
+          userId={userId}
+          senderName={me?.name ?? 'A friend'}
+          names={open ? unclaimed(open).map((g) => g.name) : []}
+          onClose={() => setSharing(false)}
         />
       </AppModal>
     </>
@@ -304,7 +358,7 @@ function RequestSummary({ request, status, hideThumb }: { request: PhotoRequest;
     per.filter((x) => x === 'pending').length && `${per.filter((x) => x === 'pending').length} waiting`,
     per.filter((x) => x === 'denied').length && `${per.filter((x) => x === 'denied').length} marked no`,
   ].filter(Boolean);
-  const people = taggedInRequest(request).length;
+  const people = taggedInRequest(request).length + unclaimed(request).length;
   return (
     <View style={styles.top}>
       {!hideThumb && <Image source={{ uri: request.photos[0].imageUrl }} style={styles.thumb} />}
@@ -323,6 +377,9 @@ function RequestSummary({ request, status, hideThumb }: { request: PhotoRequest;
           {request.kind === 'story' ? 'Story' : 'Post'}
           {many ? ` · ${request.photos.length} photos · ${parts.join(', ')}` : ''} · {people} {people === 1 ? 'person' : 'people'} asked
         </Text>
+        {request.guests.some((g) => g.disputedBy) && (
+          <Text style={[styles.deadline, { color: colors.pending, fontWeight: '700' }]}>A name got flagged. Open to sort it out.</Text>
+        )}
       </View>
     </View>
   );
@@ -347,10 +404,82 @@ function PhotoStrip({ request }: { request: PhotoRequest }) {
   );
 }
 
+/**
+ * Someone tagged by name: waiting for them to open the link, claimed (with Reset), or flagged by
+ * someone else who says they're the real one (keep or switch).
+ */
+function GuestRow({ guest: g, onReset, onSettle }: { guest: Guest; onReset: () => void; onSettle: (switchToFlagger: boolean) => void }) {
+  const claimer = g.claimedBy ? userById(g.claimedBy) : null;
+  const flagger = g.disputedBy ? userById(g.disputedBy) : null;
+  return (
+    <View style={styles.reviewRow}>
+      {claimer ? <Avatar userId={claimer.id} size={26} /> : <GuestInitial name={g.name} />}
+      <View style={{ flex: 1, gap: 8 }}>
+        <Text style={styles.reviewLine}>
+          <Text style={{ fontWeight: '700' }}>{g.name}</Text>{' '}
+          {claimer ? (
+            <Text style={{ color: colors.muted }}>
+              is {claimer.name} (@{claimer.username})
+            </Text>
+          ) : (
+            <Text style={{ color: colors.pending }}>hasn’t opened the link</Text>
+          )}
+        </Text>
+        {flagger && claimer && (
+          <View style={styles.flag}>
+            <Icon name="alert" size={15} color={colors.pending} weight={2.2} />
+            <Text style={styles.flagText}>
+              {flagger.name} (@{flagger.username}) says they’re the real {g.name}. Who is it?
+            </Text>
+          </View>
+        )}
+        {flagger && claimer ? (
+          <View style={styles.guestActions}>
+            <Pressable onPress={() => onSettle(false)} style={styles.small}>
+              <Text style={styles.smallText}>Keep {claimer.name}</Text>
+            </Pressable>
+            <Pressable onPress={() => onSettle(true)} style={[styles.small, styles.smallOn]}>
+              <Text style={[styles.smallText, { color: '#fff' }]}>Switch to {flagger.name}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          claimer && (
+            <Pressable onPress={onReset} style={[styles.small, { alignSelf: 'flex-start' }]}>
+              <Text style={styles.smallText}>Wrong person? Reset</Text>
+            </Pressable>
+          )
+        )}
+      </View>
+    </View>
+  );
+}
+
+function GuestInitial({ name }: { name: string }) {
+  return (
+    <View style={styles.guestInitial}>
+      <Text style={styles.guestInitialText}>{name[0]?.toUpperCase()}</Text>
+    </View>
+  );
+}
+
 /** Each tagged person's answer to one photo, with their reaction and note. */
 function PhotoAnswers({ photo }: { photo: Photo }) {
   return (
     <>
+      {unclaimed(photo).map((g) => {
+        const a = ANSWER[isExpired(photo) ? 'auto' : 'waiting'];
+        return (
+          <View key={g.id} style={styles.reviewRow}>
+            <GuestInitial name={g.name} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.reviewLine}>
+                <Text style={{ fontWeight: '700' }}>{g.name}</Text> <Text style={{ color: a.color }}>{a.text}</Text>
+              </Text>
+              <Text style={styles.reactionText}>Not on Proval yet · gets the group chat link</Text>
+            </View>
+          </View>
+        );
+      })}
       {photo.taggedIds.map((id) => {
         const r = photo.reviews[id];
         const a = ANSWER[answerOf(photo, id)];
@@ -473,6 +602,23 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
   },
   withdrawText: { color: colors.deny, fontWeight: '700', fontSize: 16 },
+  guestInitial: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: colors.muted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  guestInitialText: { color: colors.muted, fontWeight: '700', fontSize: 11 },
+  flag: { flexDirection: 'row', gap: 8, padding: 10, borderRadius: radius.sm, backgroundColor: colors.pendingSoft },
+  flagText: { flex: 1, color: colors.ink, lineHeight: 19 },
+  guestActions: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  small: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line },
+  smallOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  smallText: { fontWeight: '700', color: colors.ink, fontSize: 13 },
   error: { color: colors.deny },
   hero: { width: '100%', aspectRatio: 4 / 5, borderRadius: radius.lg, backgroundColor: colors.line },
   sheetDesktop: { flexDirection: 'row' },

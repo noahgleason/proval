@@ -6,16 +6,20 @@ import { Avatar } from '../components/Avatar';
 import { Icon } from '../components/Icon';
 import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
+import { ShareLinkSheet } from '../components/ShareLinkSheet';
 import { useLoader } from '../hooks/useLoader';
 import { shrinkPhoto, type ShrunkPhoto } from '../lib/shrinkPhoto';
+import { useSession } from '../session';
 import { colors, radius, type } from '../theme';
 import { AUTO_APPROVE_HOURS, MAX_POST_PHOTOS, type RequestKind } from '../types';
 import { userById } from '../users';
 
 type Props = { userId: string; onSubmitted: () => void };
 
-/** A picked photo and who's in it. */
-type Shot = ShrunkPhoto & { tagged: string[] };
+/** A picked photo and who's in it: friends by id, people not on Proval by name. */
+type Shot = ShrunkPhoto & { tagged: string[]; guests: string[] };
+
+const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 
 const KINDS: { id: RequestKind; label: string; hint: string }[] = [
   { id: 'post', label: 'Post', hint: `Up to ${MAX_POST_PHOTOS} photos, like an Instagram post. Tag who’s in each one.` },
@@ -33,6 +37,13 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const [previewing, setPreviewing] = useState(false);
+  /** Names typed so far, so the same person can be tagged on other photos. */
+  const [names, setNames] = useState<string[]>([]);
+  const [naming, setNaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  /** Just sent a request that tags people by name: show its group-chat link. */
+  const [sent, setSent] = useState<{ id: string; names: string[] } | null>(null);
+  const { me } = useSession();
   const desktop = useIsDesktop();
 
   // Refreshes on focus, so friends you just added show up.
@@ -43,6 +54,8 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
   const max = kind === 'story' ? 1 : MAX_POST_PHOTOS;
   const current = shots[Math.min(active, shots.length - 1)];
   const everyone = [...new Set(shots.flatMap((s) => s.tagged))];
+  const guestsTagged = names.filter((n) => shots.some((s) => s.guests.some((g) => sameName(g, n))));
+  const askCount = everyone.length + guestsTagged.length;
 
   const pick = async () => {
     const room = max - (kind === 'story' ? 0 : shots.length);
@@ -61,7 +74,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
     setReading(true);
     try {
       const added: Shot[] = [];
-      for (const a of result.assets.slice(0, room)) added.push({ ...(await shrinkPhoto(a.uri, a.width, a.height)), tagged: [] });
+      for (const a of result.assets.slice(0, room)) added.push({ ...(await shrinkPhoto(a.uri, a.width, a.height)), tagged: [], guests: [] });
       if (kind === 'story') {
         setShots(added.slice(0, 1));
         setActive(0);
@@ -92,6 +105,23 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
       all.map((s, i) => (i !== active ? s : { ...s, tagged: s.tagged.includes(id) ? s.tagged.filter((x) => x !== id) : [...s.tagged, id] })),
     );
 
+  const toggleName = (name: string) =>
+    setShots((all) =>
+      all.map((s, i) =>
+        i !== active ? s : { ...s, guests: s.guests.some((g) => sameName(g, name)) ? s.guests.filter((g) => !sameName(g, name)) : [...s.guests, name] },
+      ),
+    );
+
+  const addName = () => {
+    const name = draft.trim().replace(/\s+/g, ' ').slice(0, 40);
+    setDraft('');
+    setNaming(false);
+    if (!name) return;
+    const existing = names.find((n) => sameName(n, name));
+    if (!existing) setNames((all) => [...all, name]);
+    if (!current?.guests.some((g) => sameName(g, name))) toggleName(existing ?? name);
+  };
+
   const remove = () => {
     setShots((all) => all.filter((_, i) => i !== active));
     setActive((a) => Math.max(0, Math.min(a, shots.length - 2)));
@@ -108,24 +138,34 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
     setActive(to);
   };
 
-  const canSend = shots.length > 0 && everyone.length > 0 && !busy && !reading;
+  const canSend = shots.length > 0 && askCount > 0 && !busy && !reading;
 
   const send = async () => {
     if (!canSend) return;
     setBusy(true);
     setError(null);
     try {
-      await api.submit({
+      const id = await api.submit({
         uploaderId: userId,
         kind,
         caption: caption.trim(),
-        photos: shots.map((s) => ({ taggedIds: s.tagged, imageBase64: s.base64, mimeType: s.mimeType, localUri: s.uri })),
+        photos: shots.map((s) => ({
+          taggedIds: s.tagged,
+          guestNames: s.guests,
+          imageBase64: s.base64,
+          blur: s.blur,
+          mimeType: s.mimeType,
+          localUri: s.uri,
+        })),
       });
       setShots([]);
       setActive(0);
       setCaption('');
       setNotice(null);
-      onSubmitted();
+      setNames([]);
+      // People not on Proval only hear about it through the link, so offer it right away.
+      if (guestsTagged.length) setSent({ id, names: guestsTagged });
+      else onSubmitted();
     } catch (e) {
       setError(errorMessage(e, 'Upload failed'));
     } finally {
@@ -221,9 +261,9 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
               accessibilityLabel={`Photo ${i + 1}`}
             >
               <Image source={{ uri: s.uri }} style={styles.thumb} />
-              <View style={[styles.tagCount, !s.tagged.length && { backgroundColor: colors.muted }]}>
+              <View style={[styles.tagCount, !(s.tagged.length + s.guests.length) && { backgroundColor: colors.muted }]}>
                 <Icon name="users" size={10} color="#fff" weight={2.4} />
-                <Text style={styles.tagCountText}>{s.tagged.length}</Text>
+                <Text style={styles.tagCountText}>{s.tagged.length + s.guests.length}</Text>
               </View>
             </Pressable>
           ))}
@@ -241,9 +281,11 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
     <>
       <Text style={styles.label}>{kind === 'post' && shots.length > 1 ? `Who’s in photo ${active + 1}` : 'Who’s in it'}</Text>
       {!loadingFriends && friendIds.length === 0 && (
-        <Text style={styles.hint}>No friends yet. Add some from your profile ({desktop ? 'click' : 'tap'} your name up top).</Text>
+        <Text style={styles.hint}>
+          No friends yet. Add some from your profile ({desktop ? 'click' : 'tap'} your name up top), or tag people by name below.
+        </Text>
       )}
-      {!current && friendIds.length > 0 && <Text style={styles.hint}>Choose {kind === 'post' ? 'photos' : 'a photo'} first.</Text>}
+      {!current && <Text style={styles.hint}>Choose {kind === 'post' ? 'photos' : 'a photo'} first.</Text>}
       {!!current && (
         <View style={styles.friends}>
           {friends.map((f) => {
@@ -256,7 +298,46 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
               </Pressable>
             );
           })}
+          {names.map((n) => {
+            const on = current.guests.some((g) => sameName(g, n));
+            return (
+              <Pressable key={n} onPress={() => toggleName(n)} style={[styles.friend, styles.guest, on && styles.friendOn]}>
+                <View style={[styles.guestInitial, on && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+                  <Text style={styles.guestInitialText}>{n[0]?.toUpperCase()}</Text>
+                </View>
+                <Text style={[styles.friendName, on && { color: '#fff' }]}>{n}</Text>
+                {on && <Icon name="check" size={14} color="#fff" weight={2.6} />}
+              </Pressable>
+            );
+          })}
+          {naming ? (
+            <View style={styles.nameEntry}>
+              <TextInput
+                value={draft}
+                onChangeText={setDraft}
+                placeholder="Their name"
+                placeholderTextColor={colors.muted}
+                style={styles.nameInput}
+                maxLength={40}
+                autoFocus
+                autoCapitalize="words"
+                onSubmitEditing={addName}
+                onBlur={() => !draft.trim() && setNaming(false)}
+              />
+              <Pressable onPress={addName} style={styles.nameAdd} accessibilityLabel="Add">
+                <Icon name="check" size={15} color="#fff" weight={2.6} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable onPress={() => setNaming(true)} style={[styles.friend, styles.addGuest]}>
+              <Icon name="plus" size={15} color={colors.ink} weight={2.4} />
+              <Text style={styles.friendName}>Someone not on Proval</Text>
+            </Pressable>
+          )}
         </View>
+      )}
+      {!!current && names.length > 0 && (
+        <Text style={styles.hint}>After you send, you’ll get a link for the group chat. They tap their name to answer.</Text>
       )}
       {kind === 'post' && shots.length > 1 && (
         <Text style={styles.hint}>Each person only reviews the photos they’re in, and can open the whole post if they want.</Text>
@@ -294,7 +375,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
         ) : (
           <>
             <Text style={styles.sendText}>
-              {everyone.length ? `Ask ${everyone.length} ${everyone.length === 1 ? 'friend' : 'friends'}` : 'Send for approval'}
+              {askCount ? `Ask ${askCount} ${askCount === 1 ? 'person' : 'people'}` : 'Send for approval'}
             </Text>
             <Icon name="send" size={18} color="#fff" weight={2.2} />
           </>
@@ -335,6 +416,18 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
         viewerId={userId}
         startIndex={active}
         onClose={() => setPreviewing(false)}
+      />
+      <ShareLinkSheet
+        key={sent?.id}
+        requestId={sent?.id ?? null}
+        userId={userId}
+        senderName={me?.name ?? 'A friend'}
+        names={sent?.names ?? []}
+        justSent
+        onClose={() => {
+          setSent(null);
+          onSubmitted();
+        }}
       />
     </ScrollView>
   );
@@ -465,6 +558,24 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   friendOn: { borderColor: colors.ink, backgroundColor: colors.ink },
+  guest: { borderStyle: 'dashed' },
+  guestInitial: { width: 28, height: 28, borderRadius: 14, backgroundColor: colors.muted, alignItems: 'center', justifyContent: 'center' },
+  guestInitialText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  addGuest: { paddingLeft: 12, borderStyle: 'dashed', gap: 6, paddingVertical: 9 },
+  nameEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 14,
+    paddingRight: 4,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.ink,
+    backgroundColor: colors.card,
+  },
+  nameInput: { minWidth: 120, paddingVertical: 6, color: colors.ink, fontSize: 15 },
+  nameAdd: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   friendName: { fontWeight: '600', color: colors.ink },
   input: {
     borderRadius: radius.md,

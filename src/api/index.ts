@@ -1,4 +1,4 @@
-import type { Decision, FriendState, Photo, PhotoRequest, ReactionId, RequestKind, User } from '../types';
+import type { Decision, FriendState, LinkPreview, Photo, PhotoRequest, ReactionId, RequestKind, User } from '../types';
 import { mockApi } from './mock';
 import { supabaseApi } from './supabase';
 
@@ -11,7 +11,11 @@ export const usingMock = !process.env.EXPO_PUBLIC_SUPABASE_URL || !process.env.E
 export type NewPhoto = {
   /** Who's in this photo. A post can have photos with nobody tagged, as long as someone is tagged somewhere. */
   taggedIds: string[];
+  /** People not on Proval, by name. The same name on several photos is one person. */
+  guestNames: string[];
   imageBase64: string;
+  /** Tiny preview for the link page, as a data: URI. */
+  blur?: string;
   mimeType: string;
   /** Local file uri, used by the demo to show the picked photo. */
   localUri: string;
@@ -54,10 +58,25 @@ export interface Api {
   myPosts(userId: string): Promise<PhotoRequest[]>;
   /** A whole request, for "View whole post". You must have sent it or be tagged in it. */
   request(userId: string, requestId: string): Promise<PhotoRequest>;
-  submit(input: NewRequest): Promise<void>;
+  /** Returns the new request's id. */
+  submit(input: NewRequest): Promise<string>;
   review(input: ReviewInput): Promise<void>;
   /** Withdraw a request you sent, with all its photos. */
   deleteRequest(userId: string, requestId: string): Promise<void>;
+
+  /** Your request's group-chat link: its token, and whether it's turned on. */
+  shareLink(userId: string, requestId: string): Promise<{ token: string; on: boolean }>;
+  setShareOn(userId: string, requestId: string, on: boolean): Promise<void>;
+  /** The link page. Works signed out. Null if the link doesn't exist. */
+  linkPreview(userId: string, token: string): Promise<LinkPreview | null>;
+  /** Tap your name on a link. You're then tagged for real; returns the request id. */
+  claimGuest(userId: string, token: string, guestId: string): Promise<string>;
+  /** "That's not me" on a name someone else took. */
+  disputeGuest(userId: string, token: string, guestId: string): Promise<void>;
+  /** Sender: free a name again, clearing whatever the claimer answered. */
+  resetGuest(userId: string, guestId: string): Promise<void>;
+  /** Sender: settle a "That's not me" by keeping the claimer or switching to the flagger. */
+  resolveGuest(userId: string, guestId: string, switchToFlagger: boolean): Promise<void>;
 
   friends(userId: string): Promise<FriendState>;
   /** Sends a friend request, or accepts theirs if they already asked you. */

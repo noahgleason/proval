@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { api, errorMessage } from '../api';
 import { ActionSheet } from '../components/ActionSheet';
 import { Avatar } from '../components/Avatar';
@@ -148,6 +148,11 @@ export function QueueScreen({ userId }: Props) {
         <Icon name="inbox" size={28} color={colors.muted} />
       </View>
       <Text style={styles.emptyText}>Nothing waiting on you.{'\n'}Your friends can post freely, for now.</Text>
+      {Platform.OS === 'web' && (
+        <Text style={styles.emptyTip}>
+          Next time someone tags you, it shows up here. Add Proval to your home screen so it’s one tap away.
+        </Text>
+      )}
       <Pressable onPress={reload} style={styles.refresh}>
         <Icon name="refresh" size={16} color={colors.ink} weight={2} />
         <Text style={styles.refreshText}>Refresh</Text>
@@ -396,6 +401,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyText: { color: colors.muted, textAlign: 'center', lineHeight: 20 },
+  emptyTip: { color: colors.muted, textAlign: 'center', lineHeight: 19, fontSize: 13, maxWidth: 300, marginTop: 8 },
   refresh: {
     flexDirection: 'row',
     alignItems: 'center',

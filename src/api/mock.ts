@@ -5,6 +5,7 @@ import {
   MAX_POST_PHOTOS,
   pairKey,
   type Friendship,
+  type Guest,
   type Photo,
   type RequestKind,
   type Review,
@@ -31,7 +32,7 @@ const wait = (ms = 200) => new Promise((r) => setTimeout(r, ms));
 
 const img = (seed: string) => `https://picsum.photos/seed/proval-${seed}/800/1000`;
 
-type DemoPhoto = { seed: string; tagged: string[]; reviews?: Record<string, Review> };
+type DemoPhoto = { seed: string; tagged: string[]; guests?: Guest[]; reviews?: Record<string, Review> };
 
 /** Builds one request's photos. A single photo is a story request; more make a post. */
 function demoRequest(id: string, uploaderId: string, caption: string, createdAt: string, shots: DemoPhoto[], kind?: RequestKind): Photo[] {
@@ -44,11 +45,17 @@ function demoRequest(id: string, uploaderId: string, caption: string, createdAt:
     uploaderId,
     caption,
     taggedIds: s.tagged,
+    guests: s.guests ?? [],
     createdAt,
     reviews: s.reviews ?? {},
     imageUrl: img(s.seed),
   }));
 }
+
+// People tagged by name. One object per person, shared by every photo they're in.
+const jake: Guest = { id: 'g-jake', name: 'Jake' };
+const mia: Guest = { id: 'g-mia', name: 'Mia', claimedBy: 'sam', disputedBy: 'noor' };
+const noorGuest: Guest = { id: 'g-noor', name: 'Noor' };
 
 let photos: Photo[] = [
   // Marcus's beach post: Ava is in photos 1 and 3, so she reviews those two.
@@ -80,6 +87,13 @@ let photos: Photo[] = [
     { seed: 'roadtrip-4', tagged: ['jordan'], reviews: { jordan: { decision: 'approve', at: hoursAgo(48) } } },
   ]),
   ...demoRequest('r6', 'ava', 'gym mirror', hoursAgo(5), [{ seed: 'gym', tagged: ['leo'] }]),
+  // Ava tagged two people who weren't on Proval. Sam took "Mia", and Noor says that's her.
+  ...demoRequest('r8', 'ava', 'game night', hoursAgo(3), [
+    { seed: 'games', tagged: ['priya', 'sam'], guests: [jake, mia], reviews: { sam: { decision: 'approve', at: hoursAgo(2) } } },
+    { seed: 'games-2', tagged: [], guests: [jake] },
+  ]),
+  // Marcus's link names Noor, who has no friends yet: switch to Noor and open /l/demo-r9 to claim it.
+  ...demoRequest('r9', 'marcus', 'pregame', hoursAgo(1), [{ seed: 'pregame', tagged: ['jordan'], guests: [noorGuest] }]),
   ...demoRequest('r7', 'ava', '', hoursAgo(72), [
     {
       seed: 'lake',
@@ -94,6 +108,40 @@ let photos: Photo[] = [
 ];
 
 const CORE = ['ava', 'marcus', 'jordan', 'priya', 'leo'];
+/** Demo links are "demo-<request id>". */
+const tokenOf = (requestId: string) => `demo-${requestId}`;
+const shareOff = new Set<string>();
+/** Tiny previews of photos sent during the demo, by photo id. */
+const blurs = new Map<string, string>();
+const requestOfToken = (token: string) => photos.filter((p) => tokenOf(p.requestId) === token).sort((a, b) => a.position - b.position);
+const guestsOf = (shots: Photo[]) => [...new Map(shots.flatMap((p) => p.guests).map((g) => [g.id, g])).values()];
+
+/** Tags `who` everywhere the name is, and makes them friends with the sender. */
+function claimFor(guest: Guest, who: string) {
+  const shots = photos.filter((p) => p.guests.includes(guest));
+  const sender = shots[0].uploaderId;
+  if (who === sender) throw new Error('That’s your own request');
+  if (guestsOf(photos.filter((p) => p.requestId === shots[0].requestId)).some((g) => g.claimedBy === who)) {
+    throw new Error('You already picked a name on this one');
+  }
+  guest.claimedBy = who;
+  guest.disputedBy = undefined;
+  for (const p of shots) if (!p.taggedIds.includes(who)) p.taggedIds = [...p.taggedIds, who];
+  if (!friendships.has(pairKey(sender, who)) || friendships.get(pairKey(sender, who))!.status === 'pending') {
+    friendships.set(pairKey(sender, who), { from: sender, to: who, status: 'accepted', at: now() });
+  }
+}
+
+function unclaim(guest: Guest) {
+  const who = guest.claimedBy;
+  if (!who) return;
+  for (const p of photos.filter((x) => x.guests.includes(guest))) {
+    p.taggedIds = p.taggedIds.filter((id) => id !== who);
+    const { [who]: _, ...rest } = p.reviews;
+    p.reviews = rest;
+  }
+  guest.claimedBy = undefined;
+}
 const friendships = new Map<string, Friendship>(
   CORE.flatMap((a, i) =>
     CORE.slice(i + 1).map((b): [string, Friendship] => [pairKey(a, b), { from: a, to: b, status: 'accepted', at: hoursAgo(500) }]),
@@ -138,9 +186,16 @@ export const mockApi: Api = {
     if (kind === 'story' && shots.length !== 1) throw new Error('A story request has one photo');
     if (shots.length > MAX_POST_PHOTOS) throw new Error(`A post can have up to ${MAX_POST_PHOTOS} photos`);
     if (!shots.every((s) => s.taggedIds.every((id) => friends.includes(id)))) throw new Error('You can only tag friends');
-    if (!shots.some((s) => s.taggedIds.length > 0)) throw new Error('Tag at least one friend');
+    if (!shots.some((s) => s.taggedIds.length > 0 || s.guestNames.some((n) => n.trim()))) throw new Error('Tag at least one person');
     const id = `r${Date.now()}`;
     const createdAt = now();
+    const byName = new Map<string, Guest>();
+    const guestsFor = (names: string[]) =>
+      [...new Set(names.map((n) => n.trim()).filter(Boolean))].map((n) => {
+        const key = n.toLowerCase();
+        if (!byName.has(key)) byName.set(key, { id: `g${Date.now()}-${byName.size}`, name: n });
+        return byName.get(key)!;
+      });
     photos = [
       ...shots.map((s, i) => ({
         id: `${id}-${i}`,
@@ -151,12 +206,15 @@ export const mockApi: Api = {
         uploaderId,
         caption,
         taggedIds: s.taggedIds,
+        guests: guestsFor(s.guestNames),
         createdAt,
         reviews: {},
         imageUrl: s.localUri,
       })),
       ...photos,
     ];
+    shots.forEach((s, i) => s.blur && blurs.set(`${id}-${i}`, s.blur));
+    return id;
   },
   async review({ photoId, reviewerId, decision, reaction, comment }) {
     await wait(100);
@@ -170,6 +228,85 @@ export const mockApi: Api = {
   async deleteRequest(userId, requestId) {
     await wait(100);
     photos = photos.filter((p) => !(p.requestId === requestId && p.uploaderId === userId));
+  },
+
+  async shareLink(userId, requestId) {
+    await wait(100);
+    if (!photos.some((p) => p.requestId === requestId && p.uploaderId === userId)) throw new Error('That request is gone');
+    return { token: tokenOf(requestId), on: !shareOff.has(requestId) };
+  },
+  async setShareOn(userId, requestId, on) {
+    await wait(100);
+    if (!photos.some((p) => p.requestId === requestId && p.uploaderId === userId)) return;
+    if (on) shareOff.delete(requestId);
+    else shareOff.add(requestId);
+  },
+  async linkPreview(userId, token) {
+    await wait(150);
+    const shots = requestOfToken(token);
+    if (!shots.length) return null;
+    const first = shots[0];
+    const sender = DEMO_USERS.find((u) => u.id === first.uploaderId)?.name ?? 'Someone';
+    if (shareOff.has(first.requestId)) return { off: true, sender };
+    const guests = guestsOf(shots);
+    return {
+      off: false,
+      sender,
+      kind: first.kind,
+      photoCount: shots.length,
+      closesAt: new Date(Date.parse(first.createdAt) + 24 * 3_600_000).toISOString(),
+      // Built-in demo photos have no tiny preview, so the page shows a plain placeholder for them.
+      blurs: shots.map((p) => blurs.get(p.id) ?? null),
+      viewer: userId
+        ? {
+            isSender: first.uploaderId === userId,
+            tagged: shots.some((p) => p.taggedIds.includes(userId)),
+            guestId: guests.find((g) => g.claimedBy === userId)?.id ?? null,
+          }
+        : null,
+      guests: userId
+        ? guests.map((g) => ({ id: g.id, name: g.name, claimed: !!g.claimedBy, flaggedByMe: g.disputedBy === userId }))
+        : null,
+    };
+  },
+  async claimGuest(userId, token, guestId) {
+    await wait(150);
+    const shots = requestOfToken(token);
+    if (!shots.length || shareOff.has(shots[0].requestId)) throw new Error('This link is turned off');
+    if (isExpired(shots[0])) throw new Error('This link has closed');
+    const guest = guestsOf(shots).find((g) => g.id === guestId);
+    if (!guest) throw new Error('That name isn’t on this request');
+    if (guest.claimedBy) throw new Error('Someone already picked that name');
+    claimFor(guest, userId);
+    return shots[0].requestId;
+  },
+  async disputeGuest(userId, token, guestId) {
+    await wait(150);
+    const guest = guestsOf(requestOfToken(token)).find((g) => g.id === guestId);
+    if (!guest?.claimedBy) throw new Error('Nobody has that name yet, so you can just pick it');
+    if (guest.claimedBy === userId) throw new Error('That’s already you');
+    if (guest.disputedBy && guest.disputedBy !== userId) throw new Error('Someone already flagged that name');
+    guest.disputedBy = userId;
+  },
+  async resetGuest(userId, guestId) {
+    await wait(120);
+    const guest = guestsOf(photos.filter((p) => p.uploaderId === userId)).find((g) => g.id === guestId);
+    if (!guest) throw new Error('Only the sender can do that');
+    unclaim(guest);
+    guest.disputedBy = undefined;
+  },
+  async resolveGuest(userId, guestId, switchToFlagger) {
+    await wait(120);
+    const guest = guestsOf(photos.filter((p) => p.uploaderId === userId)).find((g) => g.id === guestId);
+    if (!guest) throw new Error('Only the sender can do that');
+    const flagger = guest.disputedBy;
+    if (!flagger) throw new Error('Nobody flagged that name');
+    if (switchToFlagger) {
+      unclaim(guest);
+      claimFor(guest, flagger);
+    } else {
+      guest.disputedBy = undefined;
+    }
   },
 
   async friends(userId) {

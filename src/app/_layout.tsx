@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PhoneFrame, useIsDesktop } from '../components/PhoneFrame';
+import { takePendingLink } from '../lib/share';
 import { urlFromResponse } from '../notifications';
 import { SessionProvider, useSession } from '../session';
 import { colors } from '../theme';
@@ -45,6 +46,13 @@ function RootStack() {
     return () => sub.remove();
   }, [ready]);
 
+  // Signed in from a group-chat link (Google sign-in leaves and returns to /): go back to it.
+  useEffect(() => {
+    if (!ready) return;
+    const token = takePendingLink();
+    if (token) setTimeout(() => router.replace(`/l/${token}` as never), 0);
+  }, [ready]);
+
   if (status === 'loading') {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg }}>
@@ -67,6 +75,8 @@ function RootStack() {
         <Stack.Screen name="onboarding" />
       </Stack.Protected>
       <Stack.Screen name="legal/[doc]" options={{ presentation }} />
+      {/* Group-chat links work signed in or out. */}
+      <Stack.Screen name="l/[token]" />
     </Stack>
   );
 }

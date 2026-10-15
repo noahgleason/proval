@@ -4,6 +4,7 @@ import {
   friendStateFor,
   groupRequests,
   type Friendship,
+  type LinkPreview,
   type Photo,
   type ReactionId,
   type RequestKind,
@@ -15,8 +16,9 @@ import type { Api } from './index';
 
 // A review belongs to a tag (photo + tagged person), not to the photo directly,
 // so reviews are fetched through photo_tags. The request supplies kind, caption and deadline.
+// People tagged by name come through photo_guests.
 const PHOTO_FIELDS =
-  'id, request_id, position, uploader_id, image_path, created_at, photo_requests(kind, caption, photo_count), photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at))';
+  'id, request_id, position, uploader_id, image_path, created_at, photo_requests(kind, caption, photo_count), photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at)), photo_guests(request_guests(id, name, claimed_by, disputed_by))';
 const SIGNED_URL_SECONDS = 60 * 60;
 
 type ReviewRow = { reviewer_id: string; decision: Review['decision']; reaction: ReactionId | null; comment: string | null; at: string };
@@ -30,7 +32,9 @@ type PhotoRow = {
   photo_requests: { kind: RequestKind; caption: string; photo_count: number };
   // One review per tag at most; PostgREST returns it as an object or a one-item array depending on version.
   photo_tags: { user_id: string; reviews: ReviewRow | ReviewRow[] | null }[];
+  photo_guests: { request_guests: GuestRow }[];
 };
+type GuestRow = { id: string; name: string; claimed_by: string | null; disputed_by: string | null };
 
 const reviewsOf = (r: PhotoRow): ReviewRow[] => r.photo_tags.flatMap((t) => (t.reviews == null ? [] : ([] as ReviewRow[]).concat(t.reviews)));
 type ProfileRow = { id: string; username: string; name: string; color: string };
@@ -53,7 +57,13 @@ async function loadProfiles(ids: string[]) {
 /** Rows → Photos with signed image URLs (the bucket is private). */
 async function toPhotos(rows: PhotoRow[]): Promise<Photo[]> {
   if (rows.length === 0) return [];
-  await loadProfiles(rows.flatMap((r) => [r.uploader_id, ...r.photo_tags.map((t) => t.user_id)]));
+  await loadProfiles(
+    rows.flatMap((r) => [
+      r.uploader_id,
+      ...r.photo_tags.map((t) => t.user_id),
+      ...r.photo_guests.flatMap((g) => [g.request_guests.claimed_by, g.request_guests.disputed_by].filter((x): x is string => !!x)),
+    ]),
+  );
   const signed = check(await sb().storage.from('photos').createSignedUrls(rows.map((r) => r.image_path), SIGNED_URL_SECONDS));
   const urlFor = new Map((signed ?? []).map((s) => [s.path, s.signedUrl]));
   return rows.map((r) => ({
@@ -65,6 +75,12 @@ async function toPhotos(rows: PhotoRow[]): Promise<Photo[]> {
     uploaderId: r.uploader_id,
     caption: r.photo_requests.caption,
     taggedIds: r.photo_tags.map((t) => t.user_id),
+    guests: r.photo_guests.map(({ request_guests: g }) => ({
+      id: g.id,
+      name: g.name,
+      claimedBy: g.claimed_by ?? undefined,
+      disputedBy: g.disputed_by ?? undefined,
+    })),
     createdAt: r.created_at,
     imageUrl: urlFor.get(r.image_path) ?? '',
     reviews: Object.fromEntries(
@@ -136,8 +152,8 @@ export const supabaseApi: Api = {
         check(await bucket.upload(path, decodeBase64(photo.imageBase64), { contentType: photo.mimeType }));
         paths.push(path);
       }
-      const items = input.photos.map((p, i) => ({ image_path: paths[i], tagged: p.taggedIds }));
-      check(await sb().rpc('create_request', { kind: input.kind, caption: input.caption, items }));
+      const items = input.photos.map((p, i) => ({ image_path: paths[i], tagged: p.taggedIds, guests: p.guestNames, blur: p.blur ?? null }));
+      return check(await sb().rpc('create_request', { kind: input.kind, caption: input.caption, items })) as string;
     } catch (e) {
       if (paths.length) await bucket.remove(paths);
       throw e;
@@ -154,6 +170,58 @@ export const supabaseApi: Api = {
     ) as { image_path: string }[];
     check(await sb().from('photo_requests').delete().eq('id', requestId));
     if (rows.length) await sb().storage.from('photos').remove(rows.map((r) => r.image_path));
+  },
+
+  async shareLink(_userId, requestId) {
+    const link = check(await sb().rpc('share_link', { request: requestId })) as { token: string; on: boolean } | null;
+    if (!link) throw new Error('That request is gone');
+    return link;
+  },
+
+  async setShareOn(_userId, requestId, on) {
+    check(await sb().rpc('set_share_on', { request: requestId, turned_on: on }));
+  },
+
+  async linkPreview(_userId, token) {
+    type Row = {
+      off: boolean;
+      sender: string;
+      kind: RequestKind;
+      photo_count: number;
+      closes_at: string;
+      blurs: (string | null)[];
+      viewer: null | { is_sender: boolean; tagged: boolean; guest: string | null };
+      guests: null | { id: string; name: string; claimed: boolean; flagged_by_me: boolean }[];
+    };
+    const r = check(await sb().rpc('share_preview', { token })) as Row | null;
+    if (!r) return null;
+    if (r.off) return { off: true, sender: r.sender };
+    return {
+      off: false,
+      sender: r.sender,
+      kind: r.kind,
+      photoCount: r.photo_count,
+      closesAt: r.closes_at,
+      blurs: r.blurs,
+      viewer: r.viewer && { isSender: r.viewer.is_sender, tagged: r.viewer.tagged, guestId: r.viewer.guest },
+      guests: r.guests && r.guests.map((g) => ({ id: g.id, name: g.name, claimed: g.claimed, flaggedByMe: g.flagged_by_me })),
+    } satisfies LinkPreview;
+  },
+
+  async claimGuest(_userId, token, guestId) {
+    return check(await sb().rpc('claim_guest', { token, guest: guestId })) as string;
+  },
+
+  async disputeGuest(_userId, token, guestId) {
+    check(await sb().rpc('dispute_guest', { token, guest: guestId }));
+  },
+
+  async resetGuest(_userId, guestId) {
+    check(await sb().rpc('reset_guest', { guest: guestId }));
+  },
+
+  async resolveGuest(_userId, guestId, switchToFlagger) {
+    check(await sb().rpc('resolve_guest', { guest: guestId, switch_to_flagger: switchToFlagger }));
   },
 
   async friends(userId) {

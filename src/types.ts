@@ -84,6 +84,19 @@ export type RequestKind = 'story' | 'post';
 /** Instagram's carousel limit. Mirrors create_request() in SQL. */
 export const MAX_POST_PHOTOS = 20;
 
+/**
+ * Someone tagged by name who isn't on Proval yet ("Jake"). They open the request's group-chat
+ * link, sign in and tap their name; from then on they're tagged for real (in taggedIds).
+ */
+export type Guest = {
+  id: string;
+  name: string;
+  /** Who tapped this name, once someone has. */
+  claimedBy?: string;
+  /** Someone else who says they're the real one; the sender picks. */
+  disputedBy?: string;
+};
+
 /** One photo inside a request. Everyone tagged in it answers it on its own. */
 export type Photo = {
   id: string;
@@ -97,6 +110,8 @@ export type Photo = {
   /** The request's caption. */
   caption: string;
   taggedIds: string[];
+  /** People tagged by name. Once claimed, the claimer is also in taggedIds. */
+  guests: Guest[];
   createdAt: string; // ISO date
   /** Keyed by the tagged user's id. */
   reviews: Record<string, Review>;
@@ -113,6 +128,8 @@ export type PhotoRequest = {
   createdAt: string; // ISO date
   /** In post order. */
   photos: Photo[];
+  /** Everyone tagged by name anywhere in the request. */
+  guests: Guest[];
 };
 
 /** Groups photos into their requests, keeping the order requests first appear in. */
@@ -121,10 +138,11 @@ export function groupRequests(photos: Photo[]): PhotoRequest[] {
   for (const p of photos) {
     let r = byId.get(p.requestId);
     if (!r) {
-      r = { id: p.requestId, kind: p.kind, uploaderId: p.uploaderId, caption: p.caption, createdAt: p.createdAt, photos: [] };
+      r = { id: p.requestId, kind: p.kind, uploaderId: p.uploaderId, caption: p.caption, createdAt: p.createdAt, photos: [], guests: [] };
       byId.set(p.requestId, r);
     }
     r.photos.push(p);
+    for (const g of p.guests) if (!r.guests.some((x) => x.id === g.id)) r.guests.push(g);
   }
   for (const r of byId.values()) r.photos.sort((a, b) => a.position - b.position);
   return [...byId.values()];
@@ -151,12 +169,18 @@ export function answerOf(photo: Pick<Photo, 'createdAt' | 'reviews'>, userId: st
   return isExpired(photo, now) ? 'auto' : 'waiting';
 }
 
+/** Names nobody has claimed yet. They count as waiting until the deadline, like anyone silent. */
+export const unclaimed = (photo: Pick<Photo, 'guests'>) => photo.guests.filter((g) => !g.claimedBy);
+
 /**
  * Cleared once everyone tagged approves (or stays silent until the deadline). A "no" marks the
  * photo; it isn't removed, and the sender decides what to do. A photo nobody is tagged in is cleared.
  */
-export function statusOf(photo: Pick<Photo, 'taggedIds' | 'reviews' | 'createdAt'>, now = Date.now()): PhotoStatus {
-  const answers = photo.taggedIds.map((id) => answerOf(photo, id, now));
+export function statusOf(photo: Pick<Photo, 'taggedIds' | 'guests' | 'reviews' | 'createdAt'>, now = Date.now()): PhotoStatus {
+  const answers = [
+    ...photo.taggedIds.map((id) => answerOf(photo, id, now)),
+    ...unclaimed(photo).map((): Answer => (isExpired(photo, now) ? 'auto' : 'waiting')),
+  ];
   if (answers.includes('deny')) return 'denied';
   if (answers.includes('waiting')) return 'pending';
   return 'approved';
@@ -170,10 +194,27 @@ export function requestStatusOf(request: PhotoRequest, now = Date.now()): PhotoS
   return 'approved';
 }
 
-/** Everyone tagged anywhere in the request. */
+/** Everyone with an account tagged anywhere in the request. */
 export function taggedInRequest(request: PhotoRequest): string[] {
   return [...new Set(request.photos.flatMap((p) => p.taggedIds))];
 }
+
+/** What a request's group-chat link page shows. Names only appear once you're signed in. */
+export type LinkPreview =
+  | { off: true; sender: string }
+  | {
+      off: false;
+      sender: string;
+      kind: RequestKind;
+      photoCount: number;
+      closesAt: string; // ISO date
+      /** Tiny previews, shown blurred, in post order (null for photos from before links existed). */
+      blurs: (string | null)[];
+      /** Null when signed out. */
+      viewer: null | { isSender: boolean; tagged: boolean; guestId: string | null };
+      /** Null when signed out. */
+      guests: null | { id: string; name: string; claimed: boolean; flaggedByMe: boolean }[];
+    };
 
 /** "5h", "40m", "2d": compact time until the deadline. */
 export function timeLeft(photo: Pick<Photo, 'createdAt'>, now = Date.now()): string {
