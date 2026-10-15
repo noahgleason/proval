@@ -68,7 +68,7 @@ export default function Welcome() {
             disabled={!!busy}
             style={({ pressed }) => [styles.cta, pressed && { opacity: 0.85 }]}
           >
-            {busy === p.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{p.label}</Text>}
+            {busy === p.id ? <ActivityIndicator color={colors.onInk} /> : <Text style={styles.ctaText}>{p.label}</Text>}
           </Pressable>
         ))}
         <Pressable
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   error: { color: colors.deny, marginBottom: 12 },
   ctas: { gap: 10 },
   cta: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 18, alignItems: 'center' },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 17 },
+  ctaText: { color: colors.onInk, fontWeight: '700', fontSize: 17 },
   secondary: {
     backgroundColor: colors.card,
     borderRadius: radius.pill,

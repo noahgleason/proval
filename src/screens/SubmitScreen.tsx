@@ -10,7 +10,7 @@ import { ShareLinkSheet } from '../components/ShareLinkSheet';
 import { useLoader } from '../hooks/useLoader';
 import { shrinkPhoto, type ShrunkPhoto } from '../lib/shrinkPhoto';
 import { useSession } from '../session';
-import { colors, radius, type } from '../theme';
+import { colors, onPhoto, radius, type } from '../theme';
 import { AUTO_APPROVE_HOURS, MAX_POST_PHOTOS, type RequestKind } from '../types';
 import { userById } from '../users';
 
@@ -184,7 +184,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
             accessibilityRole="button"
             accessibilityState={{ selected: kind === k.id }}
           >
-            <Text style={[styles.kindText, kind === k.id && { color: '#fff' }]}>{k.label}</Text>
+            <Text style={[styles.kindText, kind === k.id && { color: colors.onInk }]}>{k.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -209,7 +209,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
           </Pressable>
           {kind === 'story' && (
             <Pressable onPress={pick} style={styles.replaceBtn}>
-              <Icon name="image" size={15} color={colors.ink} weight={2} />
+              <Icon name="image" size={15} color={onPhoto.ink} weight={2} />
               <Text style={styles.replaceText}>Change photo</Text>
             </Pressable>
           )}
@@ -221,7 +221,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
                 style={[styles.moveBtn, active === 0 && { opacity: 0.35 }]}
                 accessibilityLabel="Move earlier"
               >
-                <Icon name="chevronLeft" size={18} color={colors.ink} weight={2.4} />
+                <Icon name="chevronLeft" size={18} color={onPhoto.ink} weight={2.4} />
               </Pressable>
               <Text style={styles.moveText}>Move</Text>
               <Pressable
@@ -230,7 +230,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
                 style={[styles.moveBtn, active === shots.length - 1 && { opacity: 0.35 }]}
                 accessibilityLabel="Move later"
               >
-                <Icon name="chevronRight" size={18} color={colors.ink} weight={2.4} />
+                <Icon name="chevronRight" size={18} color={onPhoto.ink} weight={2.4} />
               </Pressable>
             </View>
           )}
@@ -293,8 +293,8 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
             return (
               <Pressable key={f.id} onPress={() => toggle(f.id)} style={[styles.friend, on && styles.friendOn]}>
                 <Avatar userId={f.id} size={28} />
-                <Text style={[styles.friendName, on && { color: '#fff' }]}>{f.name}</Text>
-                {on && <Icon name="check" size={14} color="#fff" weight={2.6} />}
+                <Text style={[styles.friendName, on && { color: colors.onInk }]}>{f.name}</Text>
+                {on && <Icon name="check" size={14} color={colors.onInk} weight={2.6} />}
               </Pressable>
             );
           })}
@@ -302,11 +302,11 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
             const on = current.guests.some((g) => sameName(g, n));
             return (
               <Pressable key={n} onPress={() => toggleName(n)} style={[styles.friend, styles.guest, on && styles.friendOn]}>
-                <View style={[styles.guestInitial, on && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
-                  <Text style={styles.guestInitialText}>{n[0]?.toUpperCase()}</Text>
+                <View style={[styles.guestInitial, on && { backgroundColor: colors.onInkMuted }]}>
+                  <Text style={[styles.guestInitialText, on && { color: colors.ink }]}>{n[0]?.toUpperCase()}</Text>
                 </View>
-                <Text style={[styles.friendName, on && { color: '#fff' }]}>{n}</Text>
-                {on && <Icon name="check" size={14} color="#fff" weight={2.6} />}
+                <Text style={[styles.friendName, on && { color: colors.onInk }]}>{n}</Text>
+                {on && <Icon name="check" size={14} color={colors.onInk} weight={2.6} />}
               </Pressable>
             );
           })}
@@ -325,7 +325,7 @@ export function SubmitScreen({ userId, onSubmitted }: Props) {
                 onBlur={() => !draft.trim() && setNaming(false)}
               />
               <Pressable onPress={addName} style={styles.nameAdd} accessibilityLabel="Add">
-                <Icon name="check" size={15} color="#fff" weight={2.6} />
+                <Icon name="check" size={15} color={colors.onInk} weight={2.6} />
               </Pressable>
             </View>
           ) : (
@@ -496,9 +496,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: onPhoto.pill,
   },
-  replaceText: { color: colors.ink, fontWeight: '700', fontSize: 13 },
+  replaceText: { color: onPhoto.ink, fontWeight: '700', fontSize: 13 },
   moveRow: {
     position: 'absolute',
     bottom: 12,
@@ -508,10 +508,10 @@ const styles = StyleSheet.create({
     gap: 6,
     padding: 4,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    backgroundColor: onPhoto.pill,
   },
   moveBtn: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  moveText: { color: colors.ink, fontWeight: '700', fontSize: 13 },
+  moveText: { color: onPhoto.ink, fontWeight: '700', fontSize: 13 },
   strip: { gap: 8, paddingVertical: 2 },
   thumbWrap: { width: 56, height: 70, borderRadius: 10, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent' },
   thumbOn: { borderColor: colors.brand },

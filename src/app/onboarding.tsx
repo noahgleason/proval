@@ -82,7 +82,7 @@ export default function Onboarding() {
 
         <View style={{ flex: 1 }} />
         <Pressable onPress={submit} disabled={!canSubmit} style={[styles.cta, !canSubmit && { opacity: 0.4 }]}>
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>Continue</Text>}
+          {busy ? <ActivityIndicator color={colors.onInk} /> : <Text style={styles.ctaText}>Continue</Text>}
         </Pressable>
         <Pressable onPress={signOut} style={styles.out}>
           <Text style={styles.outText}>Use a different email</Text>
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   hint: { color: colors.muted, fontSize: 12 },
   error: { color: colors.deny },
   cta: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 18, alignItems: 'center' },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 17 },
+  ctaText: { color: colors.onInk, fontWeight: '700', fontSize: 17 },
   out: { alignItems: 'center', paddingVertical: 10 },
   outText: { color: colors.muted, fontWeight: '600' },
 });

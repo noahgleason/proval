@@ -153,7 +153,7 @@ export function DashboardScreen({ userId }: Props) {
               style={[styles.toggleBtn, view === v && styles.toggleOn]}
               accessibilityLabel={v === 'grid' ? 'Grid view' : 'List view'}
             >
-              <Icon name={v === 'grid' ? 'grid' : 'rows'} size={17} color={view === v ? '#fff' : colors.muted} weight={1.9} />
+              <Icon name={v === 'grid' ? 'grid' : 'rows'} size={17} color={view === v ? colors.onInk : colors.muted} weight={1.9} />
             </Pressable>
           ))}
         </View>
@@ -170,10 +170,10 @@ export function DashboardScreen({ userId }: Props) {
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
             >
-              <Text style={[styles.statNum, on && { color: '#fff' }]}>{counts[s]}</Text>
+              <Text style={[styles.statNum, on && { color: colors.onInk }]}>{counts[s]}</Text>
               <View style={styles.statLabelRow}>
                 <View style={[styles.dot, { backgroundColor: STATUS[s].fg }]} />
-                <Text style={[styles.statLabel, on && { color: 'rgba(255,255,255,0.75)' }]}>{STATUS[s].short}</Text>
+                <Text style={[styles.statLabel, on && { color: colors.onInkMuted }]}>{STATUS[s].short}</Text>
               </View>
             </Pressable>
           );
@@ -448,7 +448,7 @@ function GuestRow({ guest: g, onReset, onSettle }: { guest: Guest; onReset: () =
               <Text style={styles.smallText}>Keep {claimer.name}</Text>
             </Pressable>
             <Pressable onPress={() => onSettle(true)} style={[styles.small, styles.smallOn]}>
-              <Text style={[styles.smallText, { color: '#fff' }]}>Switch to {flagger.name}</Text>
+              <Text style={[styles.smallText, { color: colors.onInk }]}>Switch to {flagger.name}</Text>
             </Pressable>
           </View>
         ) : (

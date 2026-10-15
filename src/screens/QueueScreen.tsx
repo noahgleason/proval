@@ -274,7 +274,7 @@ export function QueueScreen({ userId }: Props) {
             style={({ pressed }) => [styles.round, styles.approveBtn, pressed && styles.pressed]}
             accessibilityLabel="Approve"
           >
-            <Icon name="check" size={28} color="#fff" weight={2.4} />
+            <Icon name="check" size={28} color={colors.onInk} weight={2.4} />
           </Pressable>
         </View>
       )}
@@ -329,8 +329,8 @@ function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore, onExpand }
           <Text style={[styles.bigText, { color: colors.deny }]}>Don’t post</Text>
         </Pressable>
         <Pressable onPress={() => onDecide('approve')} style={(s) => [styles.bigBtn, styles.bigApprove, isHovered(s) && { opacity: 0.88 }]}>
-          <Icon name="check" size={20} color="#fff" weight={2.4} />
-          <Text style={[styles.bigText, { color: '#fff' }]}>Post it</Text>
+          <Icon name="check" size={20} color={colors.onInk} weight={2.4} />
+          <Text style={[styles.bigText, { color: colors.onInk }]}>Post it</Text>
         </Pressable>
       </View>
       <Text style={styles.tip}>Tip: press ← or →, or drag the photo.</Text>

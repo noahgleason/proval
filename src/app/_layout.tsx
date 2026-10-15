@@ -10,20 +10,27 @@ import { takePendingLink } from '../lib/share';
 import { urlFromResponse } from '../notifications';
 import { SessionProvider, useSession } from '../session';
 import { colors } from '../theme';
+import { ThemeProvider, useThemeMode } from '../themeMode';
 
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <SessionProvider>
-          <StatusBar style="dark" />
-          <PhoneFrame>
-            <RootStack />
-          </PhoneFrame>
-        </SessionProvider>
+        <ThemeProvider>
+          <SessionProvider>
+            <ThemedStatusBar />
+            <PhoneFrame>
+              <RootStack />
+            </PhoneFrame>
+          </SessionProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+function ThemedStatusBar() {
+  return <StatusBar style={useThemeMode().scheme === 'dark' ? 'light' : 'dark'} />;
 }
 
 function RootStack() {

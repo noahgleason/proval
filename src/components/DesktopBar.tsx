@@ -76,7 +76,7 @@ export function BarButton({ label, onPress, solid }: { label: string; onPress: (
       onPress={onPress}
       style={(s) => [styles.button, solid ? styles.solid : styles.ghost, isHovered(s) && { opacity: 0.85 }]}
     >
-      <Text style={[styles.buttonText, solid && { color: '#fff' }]}>{label}</Text>
+      <Text style={[styles.buttonText, solid && { color: colors.onInk }]}>{label}</Text>
     </Pressable>
   );
 }

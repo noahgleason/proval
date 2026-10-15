@@ -14,7 +14,8 @@ import { showAlert } from '../lib/alert';
 import { avatarPhoto } from '../lib/avatarPhoto';
 import { useSession } from '../session';
 import type { FriendState, User } from '../types';
-import { colors, radius, type } from '../theme';
+import { colors, radius, type, type ThemeMode } from '../theme';
+import { themeChangeNeedsRestart, useThemeMode } from '../themeMode';
 import { userById } from '../users';
 
 const EMPTY: FriendState = { friends: [], incoming: [], outgoing: [] };
@@ -255,6 +256,9 @@ export function ProfileScreen() {
 
   const settings = (
     <>
+      <Section label="Appearance">
+        <ThemePicker />
+      </Section>
       <Section label="Account">
         <LinkRow icon="eye" label="Privacy policy" onPress={() => router.push('/legal/privacy')} />
         <LinkRow icon="list" label="Terms of use" onPress={() => router.push('/legal/terms')} />
@@ -370,6 +374,48 @@ function LinkRow({ icon, label, onPress, destructive }: { icon: IconName; label:
   );
 }
 
+const THEMES: { id: ThemeMode; label: string }[] = [
+  { id: 'system', label: 'System' },
+  { id: 'light', label: 'Light' },
+  { id: 'dark', label: 'Dark' },
+];
+
+/** Follow the device, or always light / dark. Remembered on this device. */
+function ThemePicker() {
+  const { mode, setMode } = useThemeMode();
+  const [changed, setChanged] = useState(false);
+  return (
+    <View style={styles.themeWrap}>
+      <View style={styles.themes} accessibilityRole="radiogroup" accessibilityLabel="Appearance">
+        {THEMES.map((t) => {
+          const on = mode === t.id;
+          return (
+            <Pressable
+              key={t.id}
+              onPress={() => {
+                setMode(t.id);
+                setChanged(true);
+              }}
+              style={[styles.theme, on && styles.themeOn]}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+            >
+              <Text style={[styles.themeText, on && { color: colors.ink }]}>{t.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Text style={styles.sub}>
+        {themeChangeNeedsRestart && changed
+          ? 'Close and reopen Proval to see the change.'
+          : mode === 'system'
+            ? 'Matches your phone or computer’s light or dark setting.'
+            : `Always ${mode}, whatever your device is set to.`}
+      </Text>
+    </View>
+  );
+}
+
 function SmallBtn({
   label,
   icon,
@@ -383,7 +429,7 @@ function SmallBtn({
   onPress: () => void;
   disabled?: boolean;
 }) {
-  const fg = solid ? '#fff' : colors.ink;
+  const fg = solid ? colors.onInk : colors.ink;
   const iconOnly = icon === 'x';
   return (
     <Pressable
@@ -432,6 +478,11 @@ const styles = StyleSheet.create({
   },
   error: { color: colors.deny },
   section: { gap: 8 },
+  themeWrap: { padding: 14, gap: 10 },
+  themes: { flexDirection: 'row', padding: 3, borderRadius: radius.pill, backgroundColor: colors.bg },
+  theme: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: radius.pill },
+  themeOn: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  themeText: { fontWeight: '700', color: colors.muted },
   label: { ...type.label, color: colors.muted },
   card: { backgroundColor: colors.card, borderRadius: radius.md + 2, padding: 6, gap: 2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 8 },

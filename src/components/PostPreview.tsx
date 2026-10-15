@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { Image, type NativeScrollEvent, type NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Decision, Photo, RequestKind } from '../types';
-import { colors, radius, type } from '../theme';
+import { colors, onPhoto, radius, type } from '../theme';
 import { userById } from '../users';
 import { AppModal } from './AppModal';
 import { Avatar } from './Avatar';
@@ -116,12 +116,12 @@ export function PostPreview({ post, viewerId, onClose, startIndex = 0, highlight
               </Pressable>
               {count > 1 && index > 0 && (
                 <Pressable onPress={() => go(index - 1)} style={[styles.arrow, { left: 10 }]} accessibilityLabel="Previous photo">
-                  <Icon name="chevronLeft" size={18} color={colors.ink} weight={2.4} />
+                  <Icon name="chevronLeft" size={18} color={onPhoto.ink} weight={2.4} />
                 </Pressable>
               )}
               {count > 1 && index < count - 1 && (
                 <Pressable onPress={() => go(index + 1)} style={[styles.arrow, { right: 10 }]} accessibilityLabel="Next photo">
-                  <Icon name="chevronRight" size={18} color={colors.ink} weight={2.4} />
+                  <Icon name="chevronRight" size={18} color={onPhoto.ink} weight={2.4} />
                 </Pressable>
               )}
             </View>
@@ -166,8 +166,8 @@ export function PostPreview({ post, viewerId, onClose, startIndex = 0, highlight
               <Text style={[styles.btnText, { color: colors.deny }]}>Don’t post</Text>
             </Pressable>
             <Pressable onPress={() => onDecide('approve')} style={[styles.btn, styles.approve]}>
-              <Icon name="check" size={18} color="#fff" weight={2.4} />
-              <Text style={[styles.btnText, { color: '#fff' }]}>Post it</Text>
+              <Icon name="check" size={18} color={colors.onInk} weight={2.4} />
+              <Text style={[styles.btnText, { color: colors.onInk }]}>Post it</Text>
             </Pressable>
           </View>
         )}
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.9)',
+    backgroundColor: onPhoto.pill,
     alignItems: 'center',
     justifyContent: 'center',
   },

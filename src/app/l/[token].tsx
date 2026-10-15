@@ -130,7 +130,7 @@ export default function LinkPage() {
             <Text style={styles.panelText}>Takes a few seconds. No password, no app to download.</Text>
             {(usingMock ? [] : OAUTH_PROVIDERS).map((p) => (
               <Pressable key={p.id} onPress={() => google(p.id)} disabled={!!busy} style={styles.cta}>
-                {busy === p.id ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{p.label}</Text>}
+                {busy === p.id ? <ActivityIndicator color={colors.onInk} /> : <Text style={styles.ctaText}>{p.label}</Text>}
               </Pressable>
             ))}
             <Pressable onPress={email} disabled={!!busy} style={usingMock ? styles.cta : styles.secondary}>
@@ -157,7 +157,7 @@ export default function LinkPage() {
             <Text style={styles.panelText}>Drop it in the group chat. Each person signs in and taps their name.</Text>
             <Pressable onPress={() => share(me?.name ?? data.sender)} style={styles.cta}>
               {busy === 'share' ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.onInk} />
               ) : (
                 <Text style={styles.ctaText}>{copied ? 'Copied' : 'Share link'}</Text>
               )}
@@ -230,7 +230,7 @@ export default function LinkPage() {
                           style={[styles.cta, { flex: 1 }]}
                         >
                           {busy ? (
-                            <ActivityIndicator color="#fff" />
+                            <ActivityIndicator color={colors.onInk} />
                           ) : (
                             <Text style={styles.ctaText}>{confirm.action === 'claim' ? 'Yes, that’s me' : 'Flag it'}</Text>
                           )}
@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
   panelTitle: { ...type.title, color: colors.ink },
   panelText: { color: colors.muted, lineHeight: 20 },
   cta: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center' },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  ctaText: { color: colors.onInk, fontWeight: '700', fontSize: 16 },
   secondary: {
     borderRadius: radius.pill,
     paddingVertical: 15,

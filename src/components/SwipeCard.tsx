@@ -5,7 +5,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 import { timeLeft, type Decision, type Photo } from '../types';
-import { colors, radius } from '../theme';
+import { colors, onPhoto, radius } from '../theme';
 import { userById } from '../users';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
@@ -139,12 +139,12 @@ export function SwipeCard({ photo, onSwiped, onPreview, onMore, onExpand, width:
             </View>
             {inPost ? (
               <Pressable onPress={onPreview} style={styles.wholePost} accessibilityLabel="View whole post" hitSlop={8}>
-                <Icon name="cards" size={16} color={colors.ink} weight={2} />
+                <Icon name="cards" size={16} color={onPhoto.ink} weight={2} />
                 <Text style={styles.wholePostText}>All {photo.photoCount}</Text>
               </Pressable>
             ) : (
               <Pressable onPress={onPreview} style={styles.preview} accessibilityLabel="Preview the post" hitSlop={8}>
-                <Icon name="eye" size={18} color={colors.ink} weight={2} />
+                <Icon name="eye" size={18} color={onPhoto.ink} weight={2} />
               </Pressable>
             )}
           </View>
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: colors.card,
-    shadowColor: colors.ink,
+    shadowColor: '#000', // shadows stay dark in both themes
     shadowOpacity: 0.14,
     shadowRadius: 24,
     shadowOffset: { width: 0, height: 12 },
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: '#fff',
   },
-  wholePostText: { color: colors.ink, fontWeight: '700', fontSize: 14 },
+  wholePostText: { color: onPhoto.ink, fontWeight: '700', fontSize: 14 },
   badge: {
     position: 'absolute',
     top: 20,

@@ -51,8 +51,8 @@ export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
                 onPress={() => setReaction(on ? undefined : r.id)}
                 style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
               >
-                <Icon name={REACTION_ICON[r.id]} size={16} color={on ? '#fff' : colors.ink} weight={1.9} />
-                <Text style={[styles.chipText, on && { color: '#fff' }]}>{r.label}</Text>
+                <Icon name={REACTION_ICON[r.id]} size={16} color={on ? colors.onInk : colors.ink} weight={1.9} />
+                <Text style={[styles.chipText, on && { color: colors.onInk }]}>{r.label}</Text>
               </Pressable>
             );
           })}
@@ -74,7 +74,7 @@ export function ReviewSheet({ decision, askerName, onSend, onUndo }: Props) {
             <Text style={[styles.btnText, { color: colors.ink }]}>Undo</Text>
           </Pressable>
           <Pressable onPress={() => onSend(reaction, comment)} style={[styles.btn, styles.primary]}>
-            <Text style={[styles.btnText, { color: '#fff' }]}>
+            <Text style={[styles.btnText, { color: colors.onInk }]}>
               {reaction || comment.trim() ? 'Send' : 'Skip note'}
             </Text>
           </Pressable>

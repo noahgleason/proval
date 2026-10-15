@@ -118,7 +118,7 @@ export default function SignIn() {
           disabled={!canSubmit}
           style={[styles.cta, !canSubmit && { opacity: 0.4 }]}
         >
-          {busy ? <ActivityIndicator color="#fff" /> : <Text style={styles.ctaText}>{step === 'email' ? 'Send code' : 'Sign in'}</Text>}
+          {busy ? <ActivityIndicator color={colors.onInk} /> : <Text style={styles.ctaText}>{step === 'email' ? 'Send code' : 'Sign in'}</Text>}
         </Pressable>
       </KeyboardAvoidingView>
     </FormPage>
@@ -155,5 +155,5 @@ const styles = StyleSheet.create({
   legal: { color: colors.muted, fontSize: 12, textAlign: 'center', lineHeight: 18 },
   legalLink: { color: colors.ink, fontWeight: '600', textDecorationLine: 'underline' },
   cta: { backgroundColor: colors.ink, borderRadius: radius.pill, paddingVertical: 18, alignItems: 'center' },
-  ctaText: { color: '#fff', fontWeight: '700', fontSize: 17 },
+  ctaText: { color: colors.onInk, fontWeight: '700', fontSize: 17 },
 });
