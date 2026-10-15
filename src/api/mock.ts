@@ -378,6 +378,15 @@ export const mockApi: Api = {
     await wait(100);
   },
 
+  async setAvatar(userId, photo) {
+    await wait(300);
+    const user = DEMO_USERS.find((u) => u.id === userId);
+    if (!user) throw new Error('Account not found');
+    user.avatarUrl = photo?.uri;
+    rememberUsers([user]);
+    return { ...user };
+  },
+
   async savePushToken() {},
   async removePushToken() {},
   async deleteAccount() {

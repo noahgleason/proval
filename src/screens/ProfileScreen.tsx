@@ -1,3 +1,4 @@
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -10,6 +11,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { desktopPage, useIsDesktop } from '../components/PhoneFrame';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
+import { avatarPhoto } from '../lib/avatarPhoto';
 import { useSession } from '../session';
 import type { FriendState, User } from '../types';
 import { colors, radius, type } from '../theme';
@@ -19,7 +21,7 @@ const EMPTY: FriendState = { friends: [], incoming: [], outgoing: [] };
 
 /** You, your friends, requests, blocked people, and account settings. */
 export function ProfileScreen() {
-  const { userId, email, me, signOut, deleteAccount, switchUser } = useSession();
+  const { userId, email, me, setPhoto, signOut, deleteAccount, switchUser } = useSession();
   const fetchAll = useCallback(
     async () => ({ friends: await api.friends(userId), blocked: await api.blocked(userId) }),
     [userId],
@@ -32,6 +34,8 @@ export function ProfileScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [photoMenu, setPhotoMenu] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const desktop = useIsDesktop();
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
@@ -114,11 +118,46 @@ export function ProfileScreen() {
     );
   };
 
+  const changePhoto = async (pick: boolean) => {
+    let photo = null;
+    if (pick) {
+      // Phones let you frame the square; on the web the middle of the photo is used.
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: 'images', quality: 1, allowsEditing: true, aspect: [1, 1] });
+      if (result.canceled) return;
+      const a = result.assets[0];
+      setPhotoBusy(true);
+      try {
+        photo = await avatarPhoto(a.uri, a.width, a.height);
+      } catch (e) {
+        setPhotoBusy(false);
+        showAlert('Couldn’t use that photo', errorMessage(e));
+        return;
+      }
+    }
+    setPhotoBusy(true);
+    try {
+      await setPhoto(photo);
+    } catch (e) {
+      showAlert(pick ? 'Couldn’t save your photo' : 'Couldn’t remove your photo', errorMessage(e));
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const menuUser = menuFor ? userById(menuFor) : null;
 
   const you = (
     <View style={[styles.top, desktop && styles.topDesktop]}>
-      <Avatar userId={userId} size={56} />
+      <Pressable
+        onPress={() => (me?.avatarUrl ? setPhotoMenu(true) : changePhoto(true))}
+        disabled={photoBusy}
+        accessibilityLabel={me?.avatarUrl ? 'Change or remove your photo' : 'Add a profile photo'}
+      >
+        <Avatar userId={userId} size={56} />
+        <View style={styles.photoBadge}>
+          {photoBusy ? <ActivityIndicator size="small" color={colors.ink} /> : <Icon name="image" size={13} color={colors.ink} weight={2.2} />}
+        </View>
+      </Pressable>
       <View style={{ flex: 1 }}>
         <Text style={styles.title}>{me?.name}</Text>
         <Text style={styles.handle}>
@@ -240,19 +279,30 @@ export function ProfileScreen() {
   );
 
   const menu = (
-    <ActionSheet
-      visible={!!menuUser}
-      title={menuUser?.name}
-      onClose={() => setMenuFor(null)}
-      options={
-        menuUser
-          ? [
-              { label: 'Remove friend', icon: 'x', onPress: () => act(menuUser.id, api.removeFriend) },
-              { label: `Block ${menuUser.name}`, icon: 'alert', destructive: true, onPress: () => block(menuUser) },
-            ]
-          : []
-      }
-    />
+    <>
+      <ActionSheet
+        visible={photoMenu}
+        title="Profile photo"
+        onClose={() => setPhotoMenu(false)}
+        options={[
+          { label: 'Choose a new photo', icon: 'image', onPress: () => changePhoto(true) },
+          { label: 'Remove photo', icon: 'trash', destructive: true, onPress: () => changePhoto(false) },
+        ]}
+      />
+      <ActionSheet
+        visible={!!menuUser}
+        title={menuUser?.name}
+        onClose={() => setMenuFor(null)}
+        options={
+          menuUser
+            ? [
+                { label: 'Remove friend', icon: 'x', onPress: () => act(menuUser.id, api.removeFriend) },
+                { label: `Block ${menuUser.name}`, icon: 'alert', destructive: true, onPress: () => block(menuUser) },
+              ]
+            : []
+        }
+      />
+    </>
   );
 
   if (desktop) {
@@ -349,6 +399,19 @@ function SmallBtn({
 }
 
 const styles = StyleSheet.create({
+  photoBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   screen: { flex: 1, backgroundColor: colors.bg },
   wrap: { padding: 20, gap: 22, paddingBottom: 48 },
   desktopWrap: { ...desktopPage, flexDirection: 'row', alignItems: 'flex-start', gap: 40, paddingTop: 40, paddingBottom: 64 },

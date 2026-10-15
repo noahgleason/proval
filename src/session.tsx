@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, errorMessage, usingMock } from './api';
 import { DEMO_USERS } from './api/mock';
+import { PROFILE_FIELDS, toUser } from './api/supabase';
+import type { AvatarPhoto } from './lib/avatarPhoto';
 import { supabase } from './lib/supabase';
 import { registerForPush, unregisterPush } from './notifications';
 import type { User } from './types';
@@ -18,6 +20,8 @@ type Session = {
   sendCode(email: string): Promise<void>;
   verifyCode(email: string, code: string): Promise<void>;
   createProfile(input: { name: string; username: string }): Promise<void>;
+  /** Sets or removes (null) your profile photo. */
+  setPhoto(photo: AvatarPhoto | null): Promise<void>;
   signOut(): Promise<void>;
   deleteAccount(): Promise<void>;
   /** Demo only: become a different placeholder account. */
@@ -55,11 +59,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setStatus('signedOut');
         return;
       }
-      const { data } = await client.from('profiles').select('id, username, name, color').eq('id', uid).maybeSingle();
+      const { data } = await client.from('profiles').select(PROFILE_FIELDS).eq('id', uid).maybeSingle();
       setUserId(uid);
       if (data) {
-        rememberUsers([data]);
-        setMe(data);
+        const user = toUser(data);
+        rememberUsers([user]);
+        setMe(user);
         setStatus('ready');
       } else {
         setMe(null);
@@ -119,6 +124,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [userId],
   );
 
+  const setPhoto = useCallback(
+    async (photo: AvatarPhoto | null) => {
+      setMe(await api.setAvatar(userId, photo));
+    },
+    [userId],
+  );
+
   const signOut = useCallback(async () => {
     await unregisterPush();
     if (supabase) {
@@ -152,8 +164,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ status, userId, email, me, sendCode, verifyCode, createProfile, signOut, deleteAccount, switchUser }),
-    [status, userId, email, me, sendCode, verifyCode, createProfile, signOut, deleteAccount, switchUser],
+    () => ({ status, userId, email, me, sendCode, verifyCode, createProfile, setPhoto, signOut, deleteAccount, switchUser }),
+    [status, userId, email, me, sendCode, verifyCode, createProfile, setPhoto, signOut, deleteAccount, switchUser],
   );
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

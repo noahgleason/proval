@@ -6,6 +6,8 @@ export type User = {
   username: string;
   name: string;
   color: string;
+  /** Profile photo. Without one, the app shows their first letter on `color`. */
+  avatarUrl?: string;
 };
 
 // ---------- Friends ----------

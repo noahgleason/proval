@@ -37,9 +37,20 @@ type PhotoRow = {
 type GuestRow = { id: string; name: string; claimed_by: string | null; claimed_at: string | null; disputed_by: string | null };
 
 const reviewsOf = (r: PhotoRow): ReviewRow[] => r.photo_tags.flatMap((t) => (t.reviews == null ? [] : ([] as ReviewRow[]).concat(t.reviews)));
-type ProfileRow = { id: string; username: string; name: string; color: string };
+type ProfileRow = { id: string; username: string; name: string; color: string; avatar_path: string | null };
 
-const toUser = (p: ProfileRow): User => ({ id: p.id, username: p.username, name: p.name, color: p.color });
+export const PROFILE_FIELDS = 'id, username, name, color, avatar_path';
+
+/** Profile photos live in a public bucket, so their links never expire and browsers can cache them. */
+const avatarUrl = (path: string | null) => (path ? sb().storage.from('avatars').getPublicUrl(path).data.publicUrl : undefined);
+
+export const toUser = (p: ProfileRow): User => ({
+  id: p.id,
+  username: p.username,
+  name: p.name,
+  color: p.color,
+  avatarUrl: avatarUrl(p.avatar_path),
+});
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message);
@@ -50,7 +61,7 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
 async function loadProfiles(ids: string[]) {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return;
-  const rows = check(await sb().from('profiles').select('id, username, name, color').in('id', unique)) as ProfileRow[];
+  const rows = check(await sb().from('profiles').select(PROFILE_FIELDS).in('id', unique)) as ProfileRow[];
   rememberUsers(rows.map(toUser));
 }
 
@@ -262,7 +273,7 @@ export const supabaseApi: Api = {
     const [rows, blocked] = await Promise.all([
       sb()
         .from('profiles')
-        .select('id, username, name, color')
+        .select(PROFILE_FIELDS)
         .or(`username.ilike.%${q}%,name.ilike.%${q}%`)
         .neq('id', userId)
         .limit(20),
@@ -292,6 +303,29 @@ export const supabaseApi: Api = {
     check(await sb().from('reports').insert({ reporter_id: reporterId, reason, photo_id: photoId ?? null, user_id: userId ?? null }));
   },
 
+  async setAvatar(userId, photo) {
+    const bucket = sb().storage.from('avatars');
+    const before = check(await sb().from('profiles').select('avatar_path').eq('id', userId).single()) as { avatar_path: string | null };
+    let path: string | null = null;
+    if (photo) {
+      // A new name each time, so nobody keeps seeing a cached old photo.
+      path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+      check(await bucket.upload(path, decodeBase64(photo.base64), { contentType: photo.mimeType, cacheControl: '31536000' }));
+    }
+    try {
+      const row = check(
+        await sb().from('profiles').update({ avatar_path: path }).eq('id', userId).select(PROFILE_FIELDS).single(),
+      ) as ProfileRow;
+      if (before.avatar_path && before.avatar_path !== path) await bucket.remove([before.avatar_path]);
+      const user = toUser(row);
+      rememberUsers([user]);
+      return user;
+    } catch (e) {
+      if (path) await bucket.remove([path]);
+      throw e;
+    }
+  },
+
   async savePushToken(userId, token, platform) {
     check(
       await sb().from('push_tokens').upsert({ token, user_id: userId, platform, updated_at: new Date().toISOString() }),
@@ -303,12 +337,14 @@ export const supabaseApi: Api = {
   },
 
   async deleteAccount(userId) {
-    // Storage files can't be deleted from SQL, so clear your folder first.
-    const bucket = sb().storage.from('photos');
-    for (;;) {
-      const files = check(await bucket.list(userId, { limit: 100 })) ?? [];
-      if (files.length === 0) break;
-      check(await bucket.remove(files.map((f) => `${userId}/${f.name}`)));
+    // Storage files can't be deleted from SQL, so clear your folders first.
+    for (const name of ['photos', 'avatars']) {
+      const bucket = sb().storage.from(name);
+      for (;;) {
+        const files = check(await bucket.list(userId, { limit: 100 })) ?? [];
+        if (files.length === 0) break;
+        check(await bucket.remove(files.map((f) => `${userId}/${f.name}`)));
+      }
     }
     check(await sb().rpc('delete_account'));
     await sb().auth.signOut();

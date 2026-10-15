@@ -1,6 +1,7 @@
 import type { Decision, FriendState, LinkPreview, Photo, PhotoRequest, ReactionId, RequestKind, User } from '../types';
 import { mockApi } from './mock';
 import { supabaseApi } from './supabase';
+import type { AvatarPhoto } from '../lib/avatarPhoto';
 
 /**
  * With EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY set, the app
@@ -97,6 +98,9 @@ export interface Api {
   block(userId: string, otherId: string): Promise<void>;
   unblock(userId: string, otherId: string): Promise<void>;
   report(input: ReportInput): Promise<void>;
+
+  /** Sets your profile photo, or removes it with null. Returns your updated profile. */
+  setAvatar(userId: string, photo: AvatarPhoto | null): Promise<User>;
 
   savePushToken(userId: string, token: string, platform: string): Promise<void>;
   removePushToken(token: string): Promise<void>;
