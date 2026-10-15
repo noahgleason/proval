@@ -80,9 +80,11 @@ export interface Api {
 
   /**
    * The numbers on the Review and Dashboard tabs: photos waiting on your answer, and changes to
-   * your requests since `dashboardSeenAt` (new answers, names claimed) plus any unsettled flags.
+   * your requests since you last opened the Dashboard (new answers, names claimed) plus any unsettled flags.
    */
-  badges(userId: string, dashboardSeenAt: string): Promise<{ review: number; dashboard: number }>;
+  badges(userId: string): Promise<{ review: number; dashboard: number }>;
+  /** You opened the Dashboard: its number clears, on every device. */
+  markDashboardSeen(userId: string): Promise<void>;
 
   friends(userId: string): Promise<FriendState>;
   /** Sends a friend request, or accepts theirs if they already asked you. */

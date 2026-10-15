@@ -13,26 +13,9 @@ export function refreshBadges() {
   listeners.forEach((l) => l());
 }
 
-// When you last looked at the Dashboard, per account, on this device.
-const seenKey = (userId: string) => `proval.dashboardSeen.${userId}`;
-
-function dashboardSeenAt(userId: string): string {
-  try {
-    const saved = localStorage.getItem(seenKey(userId));
-    if (saved) return saved;
-  } catch {}
-  // First time on this device: start counting from now rather than showing every answer ever.
-  return markDashboardSeen(userId);
-}
-
-/** Clears the Dashboard number: everything up to now counts as seen. */
-export function markDashboardSeen(userId: string): string {
-  const now = new Date().toISOString();
-  try {
-    localStorage.setItem(seenKey(userId), now);
-  } catch {}
-  refreshBadges();
-  return now;
+/** Clears the Dashboard number. It's saved with your account, so it clears on your other devices too. */
+export function markDashboardSeen(userId: string) {
+  api.markDashboardSeen(userId).then(refreshBadges, () => {});
 }
 
 /** Keeps the tab numbers current: on load, every 45 seconds, when the app comes back, and on request. */
@@ -43,7 +26,7 @@ export function useBadges(userId: string): Badges {
     if (!userId) return;
     let live = true;
     const check = () => {
-      api.badges(userId, dashboardSeenAt(userId)).then(
+      api.badges(userId).then(
         (b) => live && setBadges(b),
         () => {}, // keep the last numbers if a check fails
       );

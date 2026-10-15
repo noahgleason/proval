@@ -225,31 +225,12 @@ export const supabaseApi: Api = {
     check(await sb().rpc('resolve_guest', { guest: guestId, switch_to_flagger: switchToFlagger }));
   },
 
-  async badges(userId, seenAt) {
-    const since = new Date(Date.now() - AUTO_APPROVE_HOURS * 3_600_000).toISOString();
-    const [tags, blocks, answers, guests] = await Promise.all([
-      // Your tags on photos still inside the window, with your answer if you gave one.
-      sb()
-        .from('photo_tags')
-        .select('photo_id, reviews(reviewer_id), photos!inner(uploader_id, created_at)')
-        .eq('user_id', userId)
-        .gt('photos.created_at', since),
-      sb().from('blocks').select('blocked_id'),
-      // You can only read your own answers and answers to your photos, so everyone else's are new answers to you.
-      sb().from('reviews').select('reviewer_id', { count: 'exact', head: true }).neq('reviewer_id', userId).gt('at', seenAt),
-      sb()
-        .from('request_guests')
-        .select('id, photo_requests!inner(uploader_id)')
-        .eq('photo_requests.uploader_id', userId)
-        .or(`claimed_at.gt."${seenAt}",disputed_by.not.is.null`),
-    ]);
-    if (answers.error) throw new Error(answers.error.message);
-    const blocked = new Set((check(blocks) as { blocked_id: string }[]).map((b) => b.blocked_id));
-    type TagRow = { reviews: unknown; photos: { uploader_id: string } };
-    const waiting = (check(tags) as unknown as TagRow[]).filter(
-      (t) => (t.reviews == null || (Array.isArray(t.reviews) && t.reviews.length === 0)) && !blocked.has(t.photos.uploader_id),
-    ).length;
-    return { review: waiting, dashboard: (answers.count ?? 0) + (check(guests) as unknown[]).length };
+  async badges() {
+    return check(await sb().rpc('badge_counts')) as { review: number; dashboard: number };
+  },
+
+  async markDashboardSeen() {
+    check(await sb().rpc('mark_dashboard_seen'));
   },
 
   async friends(userId) {

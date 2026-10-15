@@ -113,6 +113,8 @@ const tokenOf = (requestId: string) => `demo-${requestId}`;
 const shareOff = new Set<string>();
 /** Tiny previews of photos sent during the demo, by photo id. */
 const blurs = new Map<string, string>();
+/** When each demo account last opened the Dashboard. */
+const dashboardSeen = new Map<string, string>();
 const requestOfToken = (token: string) => photos.filter((p) => tokenOf(p.requestId) === token).sort((a, b) => a.position - b.position);
 const guestsOf = (shots: Photo[]) => [...new Map(shots.flatMap((p) => p.guests).map((g) => [g.id, g])).values()];
 
@@ -311,8 +313,10 @@ export const mockApi: Api = {
     }
   },
 
-  async badges(userId, seenAt) {
+  async badges(userId) {
     await wait(80);
+    if (!dashboardSeen.has(userId)) dashboardSeen.set(userId, now());
+    const seenAt = dashboardSeen.get(userId)!;
     const review = photos.filter(
       (p) => p.taggedIds.includes(userId) && !p.reviews[userId] && !isExpired(p) && !isBlocked(userId, p.uploaderId),
     ).length;
@@ -320,6 +324,9 @@ export const mockApi: Api = {
     const answers = mine.flatMap((p) => Object.values(p.reviews)).filter((r) => r.at > seenAt).length;
     const names = guestsOf(mine).filter((g) => (g.claimedAt ?? '') > seenAt || g.disputedBy).length;
     return { review, dashboard: answers + names };
+  },
+  async markDashboardSeen(userId) {
+    dashboardSeen.set(userId, now());
   },
 
   async friends(userId) {
