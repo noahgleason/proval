@@ -78,6 +78,12 @@ export interface Api {
   /** Sender: settle a "That's not me" by keeping the claimer or switching to the flagger. */
   resolveGuest(userId: string, guestId: string, switchToFlagger: boolean): Promise<void>;
 
+  /**
+   * The numbers on the Review and Dashboard tabs: photos waiting on your answer, and changes to
+   * your requests since `dashboardSeenAt` (new answers, names claimed) plus any unsettled flags.
+   */
+  badges(userId: string, dashboardSeenAt: string): Promise<{ review: number; dashboard: number }>;
+
   friends(userId: string): Promise<FriendState>;
   /** Sends a friend request, or accepts theirs if they already asked you. */
   addFriend(userId: string, otherId: string): Promise<FriendState>;

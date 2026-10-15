@@ -5,7 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api, usingMock } from '../../api';
 import { Avatar } from '../../components/Avatar';
-import { BarButton, DesktopBar, isHovered, NavLink } from '../../components/DesktopBar';
+import { useBadges, type Badges } from '../../badges';
+import { BarButton, CountBubble, DesktopBar, isHovered, NavLink } from '../../components/DesktopBar';
 import { Icon, LogoMark, type IconName } from '../../components/Icon';
 import { useIsDesktop } from '../../components/PhoneFrame';
 import { useSession } from '../../session';
@@ -78,6 +79,7 @@ function TopNav({ state, navigation }: BottomTabBarProps) {
   const { userId, me } = useSession();
   const requests = useFriendRequests(userId);
   const current = state.routes[state.index]?.name;
+  const badges = useBadges(userId);
   const go = (name: string) => {
     const route = state.routes.find((r) => r.name === name);
     if (!route) return;
@@ -88,8 +90,8 @@ function TopNav({ state, navigation }: BottomTabBarProps) {
   return (
     <DesktopBar onLogoPress={() => go('index')}>
       <View style={styles.navLinks}>
-        <NavLink label="Dashboard" active={current === 'index'} onPress={() => go('index')} />
-        <NavLink label="Review" active={current === 'review'} onPress={() => go('review')} />
+        <NavLink label="Dashboard" active={current === 'index'} onPress={() => go('index')} count={countFor('index', badges, current)} />
+        <NavLink label="Review" active={current === 'review'} onPress={() => go('review')} count={countFor('review', badges, current)} />
       </View>
       <View style={{ flex: 1 }} />
       {usingMock && <Text style={styles.mockPill}>Demo data</Text>}
@@ -109,14 +111,25 @@ function TopNav({ state, navigation }: BottomTabBarProps) {
   );
 }
 
+/** Dashboard's number clears while you're on it; Review's always shows what's left to answer. */
+function countFor(tab: string, badges: Badges, current: string | undefined): number {
+  if (tab === 'review') return badges.review;
+  if (tab === 'index' && current !== 'index') return badges.dashboard;
+  return 0;
+}
+
 function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { userId } = useSession();
+  const badges = useBadges(userId);
+  const current = state.routes[state.index]?.name;
   return (
     <View style={[styles.tabs, { paddingBottom: Math.max(insets.bottom, 10) }]}>
       {state.routes.map((route, i) => {
         const tab = TABS[route.name];
         if (!tab) return null;
         const on = state.index === i;
+        const count = countFor(route.name, badges, current);
         return (
           <Pressable
             key={route.key}
@@ -127,8 +140,12 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
             style={styles.tab}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
+            accessibilityLabel={count ? `${tab.label}, ${count} new` : tab.label}
           >
-            <Icon name={tab.icon} size={22} color={on ? colors.ink : colors.muted} weight={on ? 2.1 : 1.7} />
+            <View>
+              <Icon name={tab.icon} size={22} color={on ? colors.ink : colors.muted} weight={on ? 2.1 : 1.7} />
+              <CountBubble count={count} style={styles.tabBubble} />
+            </View>
             <Text style={[styles.tabLabel, on && styles.tabLabelOn]}>{tab.label}</Text>
             <View style={[styles.tabDot, on && { backgroundColor: colors.brand }]} />
           </Pressable>
@@ -196,5 +213,6 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 3 },
   tabLabel: { fontSize: 11, fontWeight: '600', color: colors.muted, letterSpacing: 0.2 },
   tabLabelOn: { color: colors.ink },
+  tabBubble: { position: 'absolute', top: -6, left: 13, borderWidth: 2, borderColor: colors.bg, height: 20, minWidth: 20, borderRadius: 10 },
   tabDot: { width: 4, height: 4, borderRadius: 2, marginTop: 1 },
 });

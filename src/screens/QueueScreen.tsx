@@ -10,6 +10,7 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { PostPreview } from '../components/PostPreview';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { requestLine, SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
+import { refreshBadges } from '../badges';
 import { useLoader } from '../hooks/useLoader';
 import { showAlert } from '../lib/alert';
 import { REPORT_REASONS, timeLeft, type Decision, type Photo, type PhotoRequest, type ReactionId, type User } from '../types';
@@ -80,6 +81,7 @@ export function QueueScreen({ userId }: Props) {
       setError(errorMessage(e, 'Could not send your answer'));
       reload();
     }
+    refreshBadges();
   };
 
   const report = async (reason: string) => {
@@ -91,6 +93,7 @@ export function QueueScreen({ userId }: Props) {
       // Reporting also says no, so the photo can't auto-approve with you in it.
       await api.review({ photoId: photo.id, reviewerId: userId, decision: 'deny' });
       setNotice('Reported. We also told them not to post it.');
+      refreshBadges();
     } catch (e) {
       setError(errorMessage(e, 'Could not send the report'));
       reload();
@@ -115,6 +118,7 @@ export function QueueScreen({ userId }: Props) {
           try {
             await api.block(userId, other.id);
             setNotice(`${other.name} is blocked.`);
+            refreshBadges();
           } catch (e) {
             setError(errorMessage(e, 'Could not block'));
             reload();

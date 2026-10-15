@@ -18,7 +18,7 @@ import type { Api } from './index';
 // so reviews are fetched through photo_tags. The request supplies kind, caption and deadline.
 // People tagged by name come through photo_guests.
 const PHOTO_FIELDS =
-  'id, request_id, position, uploader_id, image_path, created_at, photo_requests(kind, caption, photo_count), photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at)), photo_guests(request_guests(id, name, claimed_by, disputed_by))';
+  'id, request_id, position, uploader_id, image_path, created_at, photo_requests(kind, caption, photo_count), photo_tags(user_id, reviews(reviewer_id, decision, reaction, comment, at)), photo_guests(request_guests(id, name, claimed_by, claimed_at, disputed_by))';
 const SIGNED_URL_SECONDS = 60 * 60;
 
 type ReviewRow = { reviewer_id: string; decision: Review['decision']; reaction: ReactionId | null; comment: string | null; at: string };
@@ -34,7 +34,7 @@ type PhotoRow = {
   photo_tags: { user_id: string; reviews: ReviewRow | ReviewRow[] | null }[];
   photo_guests: { request_guests: GuestRow }[];
 };
-type GuestRow = { id: string; name: string; claimed_by: string | null; disputed_by: string | null };
+type GuestRow = { id: string; name: string; claimed_by: string | null; claimed_at: string | null; disputed_by: string | null };
 
 const reviewsOf = (r: PhotoRow): ReviewRow[] => r.photo_tags.flatMap((t) => (t.reviews == null ? [] : ([] as ReviewRow[]).concat(t.reviews)));
 type ProfileRow = { id: string; username: string; name: string; color: string };
@@ -79,6 +79,7 @@ async function toPhotos(rows: PhotoRow[]): Promise<Photo[]> {
       id: g.id,
       name: g.name,
       claimedBy: g.claimed_by ?? undefined,
+      claimedAt: g.claimed_at ?? undefined,
       disputedBy: g.disputed_by ?? undefined,
     })),
     createdAt: r.created_at,
@@ -222,6 +223,33 @@ export const supabaseApi: Api = {
 
   async resolveGuest(_userId, guestId, switchToFlagger) {
     check(await sb().rpc('resolve_guest', { guest: guestId, switch_to_flagger: switchToFlagger }));
+  },
+
+  async badges(userId, seenAt) {
+    const since = new Date(Date.now() - AUTO_APPROVE_HOURS * 3_600_000).toISOString();
+    const [tags, blocks, answers, guests] = await Promise.all([
+      // Your tags on photos still inside the window, with your answer if you gave one.
+      sb()
+        .from('photo_tags')
+        .select('photo_id, reviews(reviewer_id), photos!inner(uploader_id, created_at)')
+        .eq('user_id', userId)
+        .gt('photos.created_at', since),
+      sb().from('blocks').select('blocked_id'),
+      // You can only read your own answers and answers to your photos, so everyone else's are new answers to you.
+      sb().from('reviews').select('reviewer_id', { count: 'exact', head: true }).neq('reviewer_id', userId).gt('at', seenAt),
+      sb()
+        .from('request_guests')
+        .select('id, photo_requests!inner(uploader_id)')
+        .eq('photo_requests.uploader_id', userId)
+        .or(`claimed_at.gt."${seenAt}",disputed_by.not.is.null`),
+    ]);
+    if (answers.error) throw new Error(answers.error.message);
+    const blocked = new Set((check(blocks) as { blocked_id: string }[]).map((b) => b.blocked_id));
+    type TagRow = { reviews: unknown; photos: { uploader_id: string } };
+    const waiting = (check(tags) as unknown as TagRow[]).filter(
+      (t) => (t.reviews == null || (Array.isArray(t.reviews) && t.reviews.length === 0)) && !blocked.has(t.photos.uploader_id),
+    ).length;
+    return { review: waiting, dashboard: (answers.count ?? 0) + (check(guests) as unknown[]).length };
   },
 
   async friends(userId) {

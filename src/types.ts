@@ -93,6 +93,7 @@ export type Guest = {
   name: string;
   /** Who tapped this name, once someone has. */
   claimedBy?: string;
+  claimedAt?: string; // ISO date
   /** Someone else who says they're the real one; the sender picks. */
   disputedBy?: string;
 };

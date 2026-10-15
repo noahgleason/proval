@@ -54,7 +54,7 @@ function demoRequest(id: string, uploaderId: string, caption: string, createdAt:
 
 // People tagged by name. One object per person, shared by every photo they're in.
 const jake: Guest = { id: 'g-jake', name: 'Jake' };
-const mia: Guest = { id: 'g-mia', name: 'Mia', claimedBy: 'sam', disputedBy: 'noor' };
+const mia: Guest = { id: 'g-mia', name: 'Mia', claimedBy: 'sam', claimedAt: hoursAgo(2), disputedBy: 'noor' };
 const noorGuest: Guest = { id: 'g-noor', name: 'Noor' };
 
 let photos: Photo[] = [
@@ -125,6 +125,7 @@ function claimFor(guest: Guest, who: string) {
     throw new Error('You already picked a name on this one');
   }
   guest.claimedBy = who;
+  guest.claimedAt = now();
   guest.disputedBy = undefined;
   for (const p of shots) if (!p.taggedIds.includes(who)) p.taggedIds = [...p.taggedIds, who];
   if (!friendships.has(pairKey(sender, who)) || friendships.get(pairKey(sender, who))!.status === 'pending') {
@@ -141,6 +142,7 @@ function unclaim(guest: Guest) {
     p.reviews = rest;
   }
   guest.claimedBy = undefined;
+  guest.claimedAt = undefined;
 }
 const friendships = new Map<string, Friendship>(
   CORE.flatMap((a, i) =>
@@ -307,6 +309,17 @@ export const mockApi: Api = {
     } else {
       guest.disputedBy = undefined;
     }
+  },
+
+  async badges(userId, seenAt) {
+    await wait(80);
+    const review = photos.filter(
+      (p) => p.taggedIds.includes(userId) && !p.reviews[userId] && !isExpired(p) && !isBlocked(userId, p.uploaderId),
+    ).length;
+    const mine = photos.filter((p) => p.uploaderId === userId);
+    const answers = mine.flatMap((p) => Object.values(p.reviews)).filter((r) => r.at > seenAt).length;
+    const names = guestsOf(mine).filter((g) => (g.claimedAt ?? '') > seenAt || g.disputedBy).length;
+    return { review, dashboard: answers + names };
   },
 
   async friends(userId) {

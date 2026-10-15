@@ -37,16 +37,35 @@ export function FormPage({ children, width = 440 }: { children: ReactNode; width
 }
 
 /** A text link in the header, underlined when it's the current page. */
-export function NavLink({ label, active, onPress }: { label: string; active?: boolean; onPress: () => void }) {
+export function NavLink({ label, active, onPress, count = 0 }: { label: string; active?: boolean; onPress: () => void; count?: number }) {
   return (
-    <Pressable onPress={onPress} style={styles.link} accessibilityRole="link" accessibilityState={{ selected: active }}>
+    <Pressable
+      onPress={onPress}
+      style={styles.link}
+      accessibilityRole="link"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={count ? `${label}, ${count} new` : label}
+    >
       {(s) => (
         <>
-          <Text style={[styles.linkText, (active || isHovered(s)) && { color: colors.ink }]}>{label}</Text>
+          <View style={styles.linkRow}>
+            <Text style={[styles.linkText, (active || isHovered(s)) && { color: colors.ink }]}>{label}</Text>
+            <CountBubble count={count} />
+          </View>
           <View style={[styles.underline, active && { backgroundColor: colors.brand }]} />
         </>
       )}
     </Pressable>
+  );
+}
+
+/** A red circle with how many new things there are; nothing when there are none. */
+export function CountBubble({ count, style }: { count: number; style?: object }) {
+  if (count <= 0) return null;
+  return (
+    <View style={[styles.bubble, style]}>
+      <Text style={styles.bubbleText}>{count > 99 ? '99+' : count}</Text>
+    </View>
   );
 }
 
@@ -63,6 +82,17 @@ export function BarButton({ label, onPress, solid }: { label: string; onPress: (
 }
 
 const styles = StyleSheet.create({
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  bubble: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: 9,
+    backgroundColor: colors.deny,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleText: { color: '#fff', fontSize: 11, fontWeight: '800', lineHeight: 14 },
   page: { flex: 1, backgroundColor: colors.bg },
   formScroll: { alignItems: 'center', paddingVertical: 56, paddingHorizontal: PAGE_GUTTER },
   formColumn: { width: '100%' },

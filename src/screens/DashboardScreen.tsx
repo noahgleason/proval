@@ -1,3 +1,4 @@
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { FlatList, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { api, errorMessage } from '../api';
@@ -26,6 +27,7 @@ import { userById } from '../users';
 import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
 import { PostPreview } from '../components/PostPreview';
 import { ShareLinkSheet } from '../components/ShareLinkSheet';
+import { markDashboardSeen } from '../badges';
 import { useSession } from '../session';
 
 type Props = { userId: string };
@@ -63,6 +65,13 @@ export function DashboardScreen({ userId }: Props) {
   const [focus, setFocus] = useState(0);
   const [previewAt, setPreviewAt] = useState<number | null>(null);
   const [sharing, setSharing] = useState(false);
+  // Opening the Dashboard clears its number; so does leaving, for anything that arrived while you were here.
+  useFocusEffect(
+    useCallback(() => {
+      markDashboardSeen(userId);
+      return () => markDashboardSeen(userId);
+    }, [userId]),
+  );
   const { me } = useSession();
   const width = useScreenWidth();
   const desktop = useIsDesktop();
