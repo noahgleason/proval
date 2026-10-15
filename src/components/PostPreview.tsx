@@ -6,6 +6,7 @@ import { userById } from '../users';
 import { AppModal } from './AppModal';
 import { Avatar } from './Avatar';
 import { Icon } from './Icon';
+import { PhotoViewer } from './PhotoViewer';
 
 export type PreviewPost = {
   uploaderId: string;
@@ -31,6 +32,7 @@ type Props = {
 export function PostPreview({ post, viewerId, onClose, startIndex = 0, highlightIndex, onDecide }: Props) {
   const [index, setIndex] = useState(startIndex);
   const [width, setWidth] = useState(0);
+  const [zoomed, setZoomed] = useState<string | null>(null);
   const scroller = useRef<ScrollView>(null);
   if (!post) return null;
 
@@ -109,6 +111,9 @@ export function PostPreview({ post, viewerId, onClose, startIndex = 0, highlight
                   <Text style={styles.yoursText}>The one you’re answering</Text>
                 </View>
               )}
+              <Pressable onPress={() => setZoomed(current.imageUrl)} style={styles.expand} accessibilityLabel="Full screen" hitSlop={8}>
+                <Icon name="expand" size={16} color="#fff" weight={2.2} />
+              </Pressable>
               {count > 1 && index > 0 && (
                 <Pressable onPress={() => go(index - 1)} style={[styles.arrow, { left: 10 }]} accessibilityLabel="Previous photo">
                   <Icon name="chevronLeft" size={18} color={colors.ink} weight={2.4} />
@@ -167,6 +172,7 @@ export function PostPreview({ post, viewerId, onClose, startIndex = 0, highlight
           </View>
         )}
       </View>
+      <PhotoViewer uri={zoomed} onClose={() => setZoomed(null)} />
     </AppModal>
   );
 }
@@ -196,6 +202,17 @@ const styles = StyleSheet.create({
   handle: { color: colors.muted, fontSize: 12 },
   frame: { width: '100%', aspectRatio: 4 / 5, backgroundColor: colors.line },
   image: { height: '100%', backgroundColor: colors.line },
+  expand: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.scrim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   counter: {
     position: 'absolute',
     top: 12,

@@ -6,6 +6,7 @@ import { Avatar } from '../components/Avatar';
 import { isHovered } from '../components/DesktopBar';
 import { Icon, type IconName } from '../components/Icon';
 import { desktopPage, useIsDesktop, useScreenWidth } from '../components/PhoneFrame';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { PostPreview } from '../components/PostPreview';
 import { ReviewSheet } from '../components/ReviewSheet';
 import { requestLine, SwipeCard, type SwipeCardHandle } from '../components/SwipeCard';
@@ -23,6 +24,8 @@ export function QueueScreen({ userId }: Props) {
   const { data: queue, setData: setQueue, loading, error, setError, reload } = useLoader<Photo[]>(fetchQueue, []);
   const [pending, setPending] = useState<Decision | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  /** The photo open full screen, if any. */
+  const [zoomed, setZoomed] = useState<string | null>(null);
   /** The whole post around the current photo, once "View whole post" loads it. */
   const [whole, setWhole] = useState<PhotoRequest | null>(null);
   const [menu, setMenu] = useState<Menu>(null);
@@ -39,7 +42,7 @@ export function QueueScreen({ userId }: Props) {
   const next = queue[1];
 
   // Desktop: ← and → answer, like swiping.
-  const keysOn = desktop && !!current && !pending && !previewing && menu === null;
+  const keysOn = desktop && !!current && !pending && !previewing && !zoomed && menu === null;
   useEffect(() => {
     if (!keysOn) return;
     const onKey = (e: KeyboardEvent) => {
@@ -170,6 +173,7 @@ export function QueueScreen({ userId }: Props) {
         onSwiped={setPending}
         onPreview={preview}
         onMore={() => setMenu('more')}
+        onExpand={() => setZoomed(current.imageUrl)}
         width={desktop ? cardWidth : undefined}
         hideFooter={desktop}
       />
@@ -178,6 +182,7 @@ export function QueueScreen({ userId }: Props) {
 
   const modals = (
     <>
+      <PhotoViewer uri={zoomed} onClose={() => setZoomed(null)} />
       <PostPreview
         key={current?.id}
         post={
@@ -235,6 +240,7 @@ export function QueueScreen({ userId }: Props) {
               onDecide={(d) => card.current?.swipe(d)}
               onPreview={preview}
               onMore={() => setMenu('more')}
+              onExpand={() => setZoomed(current.imageUrl)}
             />
           </View>
         ) : (
@@ -279,10 +285,11 @@ type PanelProps = {
   onDecide: (d: Decision) => void;
   onPreview: () => void;
   onMore: () => void;
+  onExpand: () => void;
 };
 
 /** Desktop: who's asking, what they'll post, and big answer buttons, beside the photo. */
-function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore }: PanelProps) {
+function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore, onExpand }: PanelProps) {
   const uploader = userById(photo.uploaderId);
   const others = photo.taggedIds.length - 1;
   return (
@@ -325,6 +332,7 @@ function DecisionPanel({ photo, waiting, onDecide, onPreview, onMore }: PanelPro
       <Text style={styles.tip}>Tip: press ← or →, or drag the photo.</Text>
 
       <View style={styles.panelLinks}>
+        <PanelLink icon="expand" label="Full screen (zoom in)" onPress={onExpand} />
         {photo.photoCount > 1 ? (
           <PanelLink icon="cards" label={`View whole post (${photo.photoCount} photos)`} onPress={onPreview} />
         ) : (

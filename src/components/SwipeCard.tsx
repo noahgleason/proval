@@ -18,6 +18,8 @@ type Props = {
   onSwiped: (d: Decision) => void;
   onPreview: () => void;
   onMore: () => void;
+  /** Opens the photo full screen, to zoom in. */
+  onExpand: () => void;
   /** The card's width, when it isn't the screen's (desktop). */
   width?: number;
   /** Desktop shows the sender and caption beside the card instead of on it. */
@@ -30,7 +32,7 @@ const decided = (d: Decision) =>
   Haptics.notificationAsync(d === 'approve' ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning);
 
 /** Tinder-style card: drag right to approve, left to deny. Runs on the UI thread. */
-export function SwipeCard({ photo, onSwiped, onPreview, onMore, width: cardWidth, hideFooter, ref }: Props) {
+export function SwipeCard({ photo, onSwiped, onPreview, onMore, onExpand, width: cardWidth, hideFooter, ref }: Props) {
   const screenWidth = useScreenWidth();
   const width = cardWidth ?? screenWidth;
   const threshold = width * 0.28;
@@ -114,6 +116,9 @@ export function SwipeCard({ photo, onSwiped, onPreview, onMore, width: cardWidth
           <Text style={styles.badgeText}>Don’t</Text>
         </Animated.View>
 
+        <Pressable onPress={onExpand} style={[styles.more, styles.expand]} accessibilityLabel="Full screen" hitSlop={8}>
+          <Icon name="expand" size={18} color="#fff" weight={2.2} />
+        </Pressable>
         <Pressable onPress={onMore} style={styles.more} accessibilityLabel="More options" hitSlop={8}>
           <Icon name="dots" size={20} color="#fff" />
         </Pressable>
@@ -182,6 +187,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  expand: { right: undefined, left: 14 },
   footer: {
     position: 'absolute',
     left: 12,

@@ -76,6 +76,7 @@ const ICONS = {
       <Path d="M6 5h12l2.5 8.5V18a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2v-4.5z" />
     </>
   ),
+  expand: <Path d="M14.5 4.5h5v5M9.5 19.5h-5v-5M19.5 4.5l-6 6M4.5 19.5l6-6" />,
   lock: (
     <>
       <Rect x={4.5} y={10.5} width={15} height={10} rx={2.5} />
